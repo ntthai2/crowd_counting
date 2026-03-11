@@ -1,17 +1,4 @@
-"""Generate STEERER dataset structure for SHA, SHB, QNRF.
-
-STEERER expects per-dataset:
-  {root}/images/{id}.jpg      (or symlink)
-  {root}/jsons/{id}.json      {"points": [[x1,y1], [x2,y2], ...]}
-  {root}/train.txt            → "id count class_id\n" per line
-  {root}/val.txt              (same format)
-  {root}/test.txt             (same format)
-
-Then a Python config file in STEERER/configs/{dataset}_final.py.
-
-Usage:
-    python preprocess/gen_steerer_data.py
-"""
+"""Generate STEERER dataset structure for SHA and SHB."""
 import os
 import glob
 import json
@@ -29,14 +16,6 @@ def read_sha_points(mat_path, prefix='GT_'):
     mat = io.loadmat(mat_path)
     pts = mat['image_info'][0, 0][0, 0][0].astype(np.float32)
     return pts  # (N,2): x,y
-
-
-def read_qnrf_points(npy_path):
-    """Read QNRF point npy (N,2) float32 (x,y)."""
-    pts = np.load(npy_path).astype(np.float32)
-    if pts.ndim == 1:
-        pts = pts.reshape(-1, 2)
-    return pts
 
 
 def make_steerer_dataset(name, out_root, splits_data):
@@ -221,28 +200,5 @@ for split, subdir in [('train', 'train_data'), ('test', 'test_data')]:
 
 make_steerer_dataset('shb', shb_out, shb_splits)
 write_config('shb', shb_out, config_name='SHHB')
-
-# ── UCF-QNRF ─────────────────────────────────────────────────────────────────
-print("\nQNRF:")
-qnrf_root = os.path.join(BASE, 'data/UCF-QNRF-processed')
-qnrf_out  = os.path.join(PROCESSED_BASE, 'QNRF')
-
-qnrf_splits = {}
-for split in ['train', 'val', 'test']:
-    entries = []
-    split_dir = os.path.join(qnrf_root, split)
-    for img_path in sorted(glob.glob(os.path.join(split_dir, '*.jpg'))):
-        stem = os.path.splitext(os.path.basename(img_path))[0]
-        # QNRF has dm/<stem>.npy (x,y) points
-        npy_path = os.path.join(qnrf_root, split, 'dm', stem + '.npy')
-        if not os.path.exists(npy_path):
-            # fallback: the direct .npy alongside jpg
-            npy_path = img_path.replace('.jpg', '.npy')
-        pts = read_qnrf_points(npy_path)
-        entries.append((img_path, pts))
-    qnrf_splits[split] = entries
-
-make_steerer_dataset('qnrf', qnrf_out, qnrf_splits)
-write_config('qnrf', qnrf_out, config_name='QNRF')
 
 print("\nDone.")

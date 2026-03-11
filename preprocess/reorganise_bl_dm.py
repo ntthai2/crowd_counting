@@ -6,12 +6,6 @@ For SHA / SHB:
     bl/train/  ← symlinks to train_data/images + BL npy computed fresh
     bl/val/    ← symlinks to test_data/images  + BL npy computed fresh
 
-For QNRF-processed (lowercase split dirs already present):
-    bl/train/  bl/val/  bl/test/  ← already correct, just check
-
-For mall / Unidata (no natural split, 80/20 used):
-    bl/train/  bl/val/
-
 This script *replaces* the existing flat bl/ and dm/ directories.
 """
 
@@ -73,85 +67,13 @@ def process_sha_shb(data_dir: Path, out_base: Path, suffix: str):
             save_pair(img_path, pts, bl_dir, dm_dir)
 
 
-# ─── QNRF-processed ──────────────────────────────────────────────────────────
-
-def process_qnrf(data_dir: Path, out_base: Path):
-    for split in ('train', 'val', 'test'):
-        img_dir = data_dir / split
-        if not img_dir.exists():
-            continue
-        bl_dir = out_base / 'bl' / split
-        dm_dir = out_base / 'dm' / split
-
-        imgs = sorted(img_dir.glob('*.jpg'))
-        print(f'  qnrf/{split}: {len(imgs)} images')
-        for img_path in tqdm(imgs, leave=False):
-            npy_path = img_path.with_suffix('.npy')
-            if not npy_path.exists():
-                continue
-            pts = np.load(str(npy_path)).astype(np.float32).reshape(-1, 2)
-            save_pair(img_path, pts, bl_dir, dm_dir)
-
-
-# ─── mall ────────────────────────────────────────────────────────────────────
-
-def process_mall(data_dir: Path, out_base: Path, val_frac: float = 0.2):
-    import scipy.io as sio
-    gt = sio.loadmat(str(data_dir / 'mall_gt.mat'))
-    locations = gt['frame'][0]  # list of per-frame struct
-
-    imgs = sorted((data_dir / 'frames').glob('*.jpg'))
-    n_val = max(1, int(len(imgs) * val_frac))
-    splits = {
-        'val':   imgs[-n_val:],
-        'train': imgs[:-n_val],
-    }
-    for split_name, img_list in splits.items():
-        bl_dir = out_base / 'bl' / split_name
-        dm_dir = out_base / 'dm' / split_name
-        print(f'  mall/{split_name}: {len(img_list)} images')
-        for img_path in tqdm(img_list, leave=False):
-            idx = int(img_path.stem.replace('seq_', '')) - 1
-            loc = locations[idx][0][0][0]                 # (N, 2)
-            pts = loc.astype(np.float32)[:, :2]
-            save_pair(img_path, pts, bl_dir, dm_dir)
-
-
-# ─── Unidata ─────────────────────────────────────────────────────────────────
-
-def process_unidata(data_dir: Path, out_base: Path, val_frac: float = 0.2):
-    label_dir = data_dir / 'labels'
-    imgs = sorted(data_dir.glob('images/*.jpg'))
-    if not imgs:
-        imgs = sorted(data_dir.glob('*.jpg'))
-    n_val = max(1, int(len(imgs) * val_frac))
-    splits = {
-        'val':   imgs[-n_val:],
-        'train': imgs[:-n_val],
-    }
-    for split_name, img_list in splits.items():
-        bl_dir = out_base / 'bl' / split_name
-        dm_dir = out_base / 'dm' / split_name
-        print(f'  unidata/{split_name}: {len(img_list)} images')
-        for img_path in tqdm(img_list, leave=False):
-            npy_path = label_dir / (img_path.stem + '.npy')
-            if not npy_path.exists():
-                npy_path = img_path.with_suffix('.npy')
-            if not npy_path.exists():
-                continue
-            pts = np.load(str(npy_path)).astype(np.float32).reshape(-1, 2)
-            save_pair(img_path, pts, bl_dir, dm_dir)
-
-
 # ─── main ────────────────────────────────────────────────────────────────────
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--shanghaiA', type=str)
     parser.add_argument('--shanghaiB', type=str)
-    parser.add_argument('--qnrf',      type=str)
-    parser.add_argument('--mall',      type=str)
-    parser.add_argument('--unidata',   type=str)
+
     args = parser.parse_args()
 
     if args.shanghaiA:
@@ -173,33 +95,6 @@ def main():
             if flat.exists() and not (flat / 'train').exists():
                 shutil.rmtree(flat)
         process_sha_shb(p, p, 'SHB')
-
-    if args.qnrf:
-        p = Path(args.qnrf)
-        print(f'Processing UCF-QNRF ...')
-        for d in ('bl', 'dm'):
-            flat = p / d
-            if flat.exists() and not (flat / 'train').exists():
-                shutil.rmtree(flat)
-        process_qnrf(p, p)
-
-    if args.mall:
-        p = Path(args.mall)
-        print(f'Processing mall ...')
-        for d in ('bl', 'dm'):
-            flat = p / d
-            if flat.exists() and not (flat / 'train').exists():
-                shutil.rmtree(flat)
-        process_mall(p, p)
-
-    if args.unidata:
-        p = Path(args.unidata)
-        print(f'Processing Unidata ...')
-        for d in ('bl', 'dm'):
-            flat = p / d
-            if flat.exists() and not (flat / 'train').exists():
-                shutil.rmtree(flat)
-        process_unidata(p, p)
 
     print('\nDone.')
 

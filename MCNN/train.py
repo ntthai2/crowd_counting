@@ -34,8 +34,6 @@ DATASET_SPLITS = {
                   'test_data/images',  'test_data/gt_density_map'),
     'shanghaiB': ('train_data/images', 'train_data/gt_density_map',
                   'test_data/images',  'test_data/gt_density_map'),
-    'mall':      ('frames',            'gt_density_map',
-                  'frames',            'gt_density_map'),
 }
 
 

@@ -31,12 +31,8 @@ setup_seed(args.seed)
 
 def main(args):
     dataset_map = {
-        'jhu':     ('./npydata/jhu_train.npy',     './npydata/jhu_val.npy'),
-        'nwpu':    ('./npydata/nwpu_train.npy',    './npydata/nwpu_val.npy'),
-        'sha':     ('./npydata/sha_train.npy',     './npydata/sha_val.npy'),
-        'shb':     ('./npydata/shb_train.npy',     './npydata/shb_val.npy'),
-        'qnrf':    ('./npydata/qnrf_train.npy',    './npydata/qnrf_val.npy'),
-        'unified': ('./npydata/unified_train.npy', './npydata/unified_val.npy'),
+        'sha': ('./npydata/sha_train.npy', './npydata/sha_val.npy'),
+        'shb': ('./npydata/shb_train.npy', './npydata/shb_val.npy'),
     }
     if args['dataset'] not in dataset_map:
         raise ValueError(f"Unknown dataset: {args['dataset']}. Choose from {list(dataset_map)}")

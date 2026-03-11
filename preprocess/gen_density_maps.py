@@ -12,25 +12,15 @@ Outputs: one `.npy` float32 density map per image, placed in a
 `gt_density_map/` directory alongside the `images/` directory of each split.
 
 Supported --dataset values:
-  shanghaiA, shanghaiB, qnrf, unidata, mall, jhu
+  shanghaiA, shanghaiB
 
 Usage
 -----
-# ShanghaiTech A
 python preprocess/gen_density_maps.py --dataset shanghaiA \
     --data-dir data/ShanghaiTech/part_A
 
-# UCF-QNRF (after preprocess_dataset.py resize)
-python preprocess/gen_density_maps.py --dataset qnrf \
-    --data-dir data/UCF-QNRF-processed
-
-# Unidata (after convert_unidata.py)
-python preprocess/gen_density_maps.py --dataset unidata \
-    --data-dir data/Unidata/processed
-
-# mall
-python preprocess/gen_density_maps.py --dataset mall \
-    --data-dir data/mall_dataset
+python preprocess/gen_density_maps.py --dataset shanghaiB \
+    --data-dir data/ShanghaiTech/part_B
 """
 
 import argparse
@@ -136,83 +126,6 @@ def _iter_shanghaitech(data_dir: Path, split: str):
         yield img_file, pts
 
 
-def _iter_qnrf(data_dir: Path, split: str):
-    """Yield (img_path, points_array) for UCF-QNRF.
-
-    Supports both the original layout (split names: Train/Test, annotations: _ann.mat)
-    and the DM-Count preprocessed layout (split names: train/test/val,
-    annotations: <stem>.npy with shape (N,2)).
-    """
-    split_dir = data_dir / split
-    if not split_dir.exists():
-        return
-    for img_file in sorted(split_dir.glob("*.jpg")):
-        # Try DM-Count-processed .npy first
-        npy_file = split_dir / (img_file.stem + ".npy")
-        if npy_file.exists():
-            pts = np.load(str(npy_file)).astype(np.float32)
-            yield img_file, pts
-            continue
-        # Fall back to original _ann.mat
-        ann_file = split_dir / (img_file.stem + "_ann.mat")
-        if not ann_file.exists():
-            print(f"[WARN] Missing annotation: {ann_file}")
-            continue
-        mat = scipy.io.loadmat(str(ann_file))
-        pts = mat["annPoints"].astype(np.float32)
-        yield img_file, pts
-
-
-def _iter_unidata(data_dir: Path):
-    """Yield (img_path, points_array) for converted Unidata."""
-    img_root = data_dir / "images"
-    lbl_root = data_dir / "labels"
-    for img_file in sorted(img_root.rglob("*.jpg")):
-        bucket = img_file.parent.name
-        npy_file = lbl_root / bucket / f"{img_file.stem}.npy"
-        if not npy_file.exists():
-            print(f"[WARN] Missing annotation: {npy_file}")
-            continue
-        pts = np.load(str(npy_file))                # (N, 2) x,y
-        yield img_file, pts
-
-
-def _iter_mall(data_dir: Path):
-    """Yield (img_path, points_array) for the mall dataset."""
-    gt_mat = scipy.io.loadmat(str(data_dir / "mall_gt.mat"))
-    frames_dir = data_dir / "frames"
-    frame_data = gt_mat["frame"][0]                 # 2000-element object array
-
-    for idx, fr in enumerate(frame_data):
-        loc = fr["loc"][0, 0].astype(np.float32)    # (N, 2) x,y
-        img_file = frames_dir / f"seq_{idx + 1:06d}.jpg"
-        if not img_file.exists():
-            print(f"[WARN] Missing frame: {img_file}")
-            continue
-        yield img_file, loc
-
-
-def _iter_jhu(data_dir: Path, split: str):
-    """Yield (img_path, points_array) for one JHU-Crowd++ split.
-
-    GT format per line: x y w h o b  (x,y are head center coordinates).
-    """
-    img_dir = data_dir / split / "images"
-    gt_dir  = data_dir / split / "gt"
-    for img_file in sorted(img_dir.glob("*.jpg")):
-        gt_file = gt_dir / (img_file.stem + ".txt")
-        if not gt_file.exists():
-            print(f"[WARN] Missing GT: {gt_file}")
-            continue
-        pts = []
-        with open(gt_file) as f:
-            for line in f:
-                parts = line.strip().split()
-                if len(parts) >= 2:
-                    pts.append([float(parts[0]), float(parts[1])])
-        yield img_file, np.array(pts, dtype=np.float32).reshape(-1, 2)
-
-
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -241,8 +154,7 @@ def generate_for_split(iterator, out_root: Path, desc: str):
 def main():
     parser = argparse.ArgumentParser(description="Generate adaptive Gaussian density maps")
     parser.add_argument("--dataset", required=True,
-                        choices=["shanghaiA", "shanghaiB", "qnrf", "unidata", "mall", "jhu"],
-                        # jhu: data/jhu_crowd  (train/val/test splits are all processed)
+                        choices=["shanghaiA", "shanghaiB"],
                         help="Dataset identifier")
     parser.add_argument("--data-dir", required=True,
                         help="Root directory of the dataset")
@@ -250,39 +162,12 @@ def main():
 
     data_dir = Path(args.data_dir)
 
-    if args.dataset in ("shanghaiA", "shanghaiB"):
-        for split in ("train_data", "test_data"):
-            out_root = data_dir / split / "gt_density_map"
-            generate_for_split(
-                _iter_shanghaitech(data_dir, split), out_root,
-                desc=f"{args.dataset}/{split}"
-            )
-
-    elif args.dataset == "qnrf":
-        # Support both processed (train/val/test) and original (Train/Test) layouts
-        for split in ("train", "val", "test", "Train", "Test"):
-            if (data_dir / split).exists():
-                out_root = data_dir / split / "gt_density_map"
-                generate_for_split(
-                    _iter_qnrf(data_dir, split), out_root,
-                    desc=f"qnrf/{split}"
-                )
-
-    elif args.dataset == "unidata":
-        out_root = data_dir / "gt_density_map"
-        generate_for_split(_iter_unidata(data_dir), out_root, desc="unidata")
-
-    elif args.dataset == "mall":
-        out_root = data_dir / "gt_density_map"
-        generate_for_split(_iter_mall(data_dir), out_root, desc="mall")
-
-    elif args.dataset == "jhu":
-        for split in ("train", "val", "test"):
-            out_root = data_dir / split / "gt_density_map"
-            generate_for_split(
-                _iter_jhu(data_dir, split), out_root,
-                desc=f"jhu/{split}"
-            )
+    for split in ("train_data", "test_data"):
+        out_root = data_dir / split / "gt_density_map"
+        generate_for_split(
+            _iter_shanghaitech(data_dir, split), out_root,
+            desc=f"{args.dataset}/{split}"
+        )
 
     print("Density map generation complete.")
 

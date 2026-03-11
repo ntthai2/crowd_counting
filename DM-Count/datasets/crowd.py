@@ -101,67 +101,6 @@ class Base(data.Dataset):
             gt_discrete.copy()).float()
 
 
-class Crowd_qnrf(Base):
-    def __init__(self, root_path, crop_size,
-                 downsample_ratio=8,
-                 method='train'):
-        super().__init__(root_path, crop_size, downsample_ratio)
-        self.method = method
-        self.im_list = sorted(glob(os.path.join(self.root_path, '*.jpg')))
-        print('number of img: {}'.format(len(self.im_list)))
-        if method not in ['train', 'val']:
-            raise Exception("not implement")
-
-    def __len__(self):
-        return len(self.im_list)
-
-    def __getitem__(self, item):
-        img_path = self.im_list[item]
-        gd_path = img_path.replace('jpg', 'npy')
-        img = Image.open(img_path).convert('RGB')
-        if self.method == 'train':
-            keypoints = np.load(gd_path)
-            return self.train_transform(img, keypoints)
-        elif self.method == 'val':
-            keypoints = np.load(gd_path)
-            img = self.trans(img)
-            name = os.path.basename(img_path).split('.')[0]
-            return img, len(keypoints), name
-
-
-class Crowd_nwpu(Base):
-    def __init__(self, root_path, crop_size,
-                 downsample_ratio=8,
-                 method='train'):
-        super().__init__(root_path, crop_size, downsample_ratio)
-        self.method = method
-        self.im_list = sorted(glob(os.path.join(self.root_path, '*.jpg')))
-        print('number of img: {}'.format(len(self.im_list)))
-
-        if method not in ['train', 'val', 'test']:
-            raise Exception("not implement")
-
-    def __len__(self):
-        return len(self.im_list)
-
-    def __getitem__(self, item):
-        img_path = self.im_list[item]
-        gd_path = img_path.replace('jpg', 'npy')
-        img = Image.open(img_path).convert('RGB')
-        if self.method == 'train':
-            keypoints = np.load(gd_path)
-            return self.train_transform(img, keypoints)
-        elif self.method == 'val':
-            keypoints = np.load(gd_path)
-            img = self.trans(img)
-            name = os.path.basename(img_path).split('.')[0]
-            return img, len(keypoints), name
-        elif self.method == 'test':
-            img = self.trans(img)
-            name = os.path.basename(img_path).split('.')[0]
-            return img, name
-
-
 class Crowd_sh(Base):
     def __init__(self, root_path, crop_size,
                  downsample_ratio=8,

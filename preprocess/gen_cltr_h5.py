@@ -21,15 +21,6 @@ python preprocess/gen_cltr_h5.py --dataset shanghaiA \
 
 python preprocess/gen_cltr_h5.py --dataset shanghaiB \
     --data-dir data/ShanghaiTech/part_B
-
-python preprocess/gen_cltr_h5.py --dataset qnrf \
-    --data-dir data/UCF-QNRF-processed
-
-python preprocess/gen_cltr_h5.py --dataset unidata \
-    --data-dir data/Unidata/processed
-
-python preprocess/gen_cltr_h5.py --dataset mall \
-    --data-dir data/mall_dataset
 """
 
 import argparse
@@ -77,68 +68,6 @@ def _iter_shanghaitech(data_dir: Path, split: str):
         yield img_file, pts, out_dir
 
 
-def _iter_qnrf(data_dir: Path, split: str):
-    """Supports both processed (.npy) and original (_ann.mat) QNRF layouts."""
-    split_dir = data_dir / split
-    if not split_dir.exists():
-        return
-    out_dir = split_dir / "gt_detr_map"
-    for img_file in sorted(split_dir.glob("*.jpg")):
-        npy_file = split_dir / (img_file.stem + ".npy")
-        if npy_file.exists():
-            pts = np.load(str(npy_file)).astype(np.float32)
-            yield img_file, pts, out_dir
-            continue
-        ann_file = split_dir / (img_file.stem + "_ann.mat")
-        if not ann_file.exists():
-            continue
-        mat = scipy.io.loadmat(str(ann_file))
-        yield img_file, mat["annPoints"].astype(np.float32), out_dir
-
-
-def _iter_unidata(data_dir: Path):
-    img_root = data_dir / "images"
-    lbl_root = data_dir / "labels"
-    out_root = data_dir / "gt_detr_map"
-    for img_file in sorted(img_root.rglob("*.jpg")):
-        bucket   = img_file.parent.name
-        npy_file = lbl_root / bucket / f"{img_file.stem}.npy"
-        if not npy_file.exists():
-            continue
-        pts = np.load(str(npy_file))
-        yield img_file, pts, out_root / bucket
-
-
-def _iter_mall(data_dir: Path):
-    gt_mat     = scipy.io.loadmat(str(data_dir / "mall_gt.mat"))
-    frames_dir = data_dir / "frames"
-    out_dir    = data_dir / "gt_detr_map"
-    for idx, fr in enumerate(gt_mat["frame"][0]):
-        loc      = fr["loc"][0, 0].astype(np.float32)
-        img_file = frames_dir / f"seq_{idx + 1:06d}.jpg"
-        if not img_file.exists():
-            continue
-        yield img_file, loc, out_dir
-
-
-def _iter_jhu(data_dir: Path, split: str):
-    """GT format per line: x y w h o b  (x,y = head centers)."""
-    img_dir = data_dir / split / "images"
-    gt_dir  = data_dir / split / "gt"
-    out_dir = data_dir / split / "gt_detr_map"
-    for img_file in sorted(img_dir.glob("*.jpg")):
-        gt_file = gt_dir / (img_file.stem + ".txt")
-        if not gt_file.exists():
-            continue
-        pts = []
-        with open(gt_file) as f:
-            for line in f:
-                parts = line.strip().split()
-                if len(parts) >= 2:
-                    pts.append([float(parts[0]), float(parts[1])])
-        yield img_file, np.array(pts, dtype=np.float32).reshape(-1, 2), out_dir
-
-
 # ---------------------------------------------------------------------------
 # Core writer
 # ---------------------------------------------------------------------------
@@ -170,29 +99,13 @@ def process(iterator, desc: str):
 def main():
     parser = argparse.ArgumentParser(description="Generate CLTR-format .h5 files")
     parser.add_argument("--dataset", required=True,
-                        choices=["shanghaiA", "shanghaiB", "qnrf", "unidata", "mall", "jhu"])
+                        choices=["shanghaiA", "shanghaiB"])
     parser.add_argument("--data-dir", required=True)
     args = parser.parse_args()
     data_dir = Path(args.data_dir)
 
-    if args.dataset in ("shanghaiA", "shanghaiB"):
-        for split in ("train_data", "test_data"):
-            process(_iter_shanghaitech(data_dir, split), f"{args.dataset}/{split}")
-
-    elif args.dataset == "qnrf":
-        for split in ("train", "val", "test", "Train", "Test"):
-            if (data_dir / split).exists():
-                process(_iter_qnrf(data_dir, split), f"qnrf/{split}")
-
-    elif args.dataset == "unidata":
-        process(_iter_unidata(data_dir), "unidata")
-
-    elif args.dataset == "mall":
-        process(_iter_mall(data_dir), "mall")
-
-    elif args.dataset == "jhu":
-        for split in ("train", "val", "test"):
-            process(_iter_jhu(data_dir, split), f"jhu/{split}")
+    for split in ("train_data", "test_data"):
+        process(_iter_shanghaitech(data_dir, split), f"{args.dataset}/{split}")
 
     print("Done.")
 

@@ -8,7 +8,7 @@ from torch.utils.data.dataloader import default_collate
 import numpy as np
 from datetime import datetime
 
-from datasets.crowd import Crowd_qnrf, Crowd_nwpu, Crowd_sh
+from datasets.crowd import Crowd_sh
 from models import vgg19
 from losses.ot_loss import OT_Loss
 from utils.pytorch_utils import Save_Handle, AverageMeter
@@ -48,20 +48,14 @@ class Trainer(object):
             raise Exception("gpu is not available")
 
         downsample_ratio = 8
-        if args.dataset.lower() == 'qnrf':
-            self.datasets = {x: Crowd_qnrf(os.path.join(args.data_dir, x),
-                                           args.crop_size, downsample_ratio, x) for x in ['train', 'val']}
-        elif args.dataset.lower() == 'nwpu':
-            self.datasets = {x: Crowd_nwpu(os.path.join(args.data_dir, x),
-                                           args.crop_size, downsample_ratio, x) for x in ['train', 'val']}
-        elif args.dataset.lower() == 'sha' or args.dataset.lower() == 'shb':
+        if args.dataset.lower() in ('sha', 'shb'):
             self.datasets = {'train': Crowd_sh(os.path.join(args.data_dir, 'train_data'),
                                                args.crop_size, downsample_ratio, 'train'),
                              'val': Crowd_sh(os.path.join(args.data_dir, 'test_data'),
                                              args.crop_size, downsample_ratio, 'val'),
                              }
         else:
-            raise NotImplementedError
+            raise NotImplementedError(f"Unknown dataset: {args.dataset}. Choose 'sha' or 'shb'.")
 
         self.dataloaders = {x: DataLoader(self.datasets[x],
                                           collate_fn=(train_collate
@@ -206,7 +200,6 @@ class Trainer(object):
         mae = np.mean(np.abs(epoch_res))
         self.logger.info('Epoch {} Val, MSE: {:.2f} MAE: {:.2f}, Cost {:.1f} sec'
                          .format(self.epoch, mse, mae, time.time() - epoch_start))
-        print(f'VAL epoch={self.epoch} mae={mae:.2f} mse={mse:.2f} best_mae={self.best_mae:.2f}')
 
         model_state_dic = self.model.state_dict()
         improved = (2.0 * mse + mae) < (2.0 * self.best_mse + self.best_mae)
@@ -217,4 +210,5 @@ class Trainer(object):
                                                                                      self.best_mae,
                                                                                      self.epoch))
             torch.save(model_state_dic, os.path.join(self.save_dir, 'best_model.pth'))
+        print(f'VAL epoch={self.epoch} mae={mae:.2f} mse={mse:.2f} best_mae={self.best_mae:.2f}')
         return improved

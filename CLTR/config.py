@@ -2,8 +2,8 @@ import argparse
 
 parser = argparse.ArgumentParser(description='CLTR')
 
-parser.add_argument('--dataset', type=str, default='jhu',
-                    help='choice train dataset')
+parser.add_argument('--dataset', type=str, default='sha',
+                    help='choice train dataset: sha, shb')
 
 parser.add_argument('--save_path', type=str, default='save_file/A_ddp',
                     help='save checkpoint directory')

@@ -30,23 +30,13 @@ def main(args):
     elif args['dataset'] == 'ShanghaiB':
         train_file = './npydata/ShanghaiB_train.npy'
         test_file = './npydata/ShanghaiB_test.npy'
-    elif args['dataset'] == 'UCF_QNRF':
-        train_file = './npydata/qnrf_train.npy'
-        test_file = './npydata/qnrf_test.npy'
-    elif args['dataset'] == 'JHU':
-        train_file = './npydata/jhu_train.npy'
-        test_file = './npydata/jhu_val.npy'
-    elif args['dataset'] == 'NWPU':
-        train_file = './npydata/nwpu_train.npy'
-        test_file = './npydata/nwpu_val.npy'
-    elif args['dataset'] == 'unified':
-        train_file = './npydata/unified_train.npy'
-        test_file = './npydata/unified_val.npy'
+    else:
+        raise ValueError(f"Unknown dataset: {args['dataset']}. Choose 'ShanghaiA' or 'ShanghaiB'.")
 
     with open(train_file, 'rb') as outfile:
-        train_list = np.load(outfile).tolist()
+        train_list = np.load(outfile, allow_pickle=True).tolist()
     with open(test_file, 'rb') as outfile:
-        val_list = np.load(outfile).tolist()
+        val_list = np.load(outfile, allow_pickle=True).tolist()
 
     print(len(train_list), len(val_list))
 
@@ -97,18 +87,17 @@ def main(args):
 
     print(args['best_pred'], args['start_epoch'])
 
-    # For the unified dataset, counts are pre-saved in a sidecar npy file.
-    # Load them here so pre_data can skip the per-image h5 lookup.
+    # Counts are pre-saved in a sidecar _counts.npy file (no per-image h5 lookup needed).
     count_list_train, count_list_val = None, None
-    if args['dataset'] == 'unified':
+    if args['dataset'] in ('ShanghaiA', 'ShanghaiB'):
         count_file_train = train_file.replace('.npy', '_counts.npy')
         count_file_val   = test_file.replace('.npy', '_counts.npy')
         if os.path.exists(count_file_train):
             with open(count_file_train, 'rb') as f:
-                count_list_train = np.load(f).tolist()
+                count_list_train = np.load(f, allow_pickle=True).tolist()
         if os.path.exists(count_file_val):
             with open(count_file_val, 'rb') as f:
-                count_list_val = np.load(f).tolist()
+                count_list_val = np.load(f, allow_pickle=True).tolist()
 
     train_data = pre_data(train_list, args, train=True,  count_list=count_list_train)
     test_data  = pre_data(val_list,   args, train=False, count_list=count_list_val)

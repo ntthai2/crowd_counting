@@ -17,8 +17,6 @@ parser.add_argument('--start_epoch', type=int, default=0,
                     help='start epoch for training')
 
 # Model specifications
-parser.add_argument('--test_dataset', type=str, default='UCF_QNRF',
-                    help='choice train dataset')
 parser.add_argument('--pre', type=str, default=None,
                     help='pre-trained model directory')
 # parser.add_argument('--pre', type=str, default='./save_file/A_baseline_4/model_best_66.1.pth',
