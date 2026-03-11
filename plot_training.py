@@ -3,8 +3,8 @@
 Parse VAL log lines from training logs and plot MAE/MSE over epochs.
 
 Usage:
-    python plot_training.py --log-dir logs/ --output plots/training_curves.png
-    python plot_training.py --log-dir logs/ --output plots/training_curves.png --models csrnet mcnn
+    python plot_training.py
+    python plot_training.py --models mcnn_sha
 
 Expected log format (one line per validation epoch):
     VAL epoch=XXX mae=XX.XX mse=XX.XX best_mae=XX.XX
@@ -24,14 +24,23 @@ import matplotlib.pyplot as plt
 # Map log file stem -> display name
 LOG_FILES = {
     'csrnet_sha':        'CSRNet (SHA)',
+    'csrnet_shb':        'CSRNet (SHB)',
     'mcnn_sha':          'MCNN (SHA)',
-    'vgg16_unified':     'VGG16+FC (Unified)',
-    'resnet50_unified':  'ResNet50+FC (Unified)',
-    'transcrowd_unified':'TransCrowd (Unified)',
+    'mcnn_shb':          'MCNN (SHB)',
+    'vgg16_sha':         'VGG16+FC (SHA)',
+    'vgg16_shb':         'VGG16+FC (SHB)',
+    'resnet50_sha':      'ResNet50+FC (SHA)',
+    'resnet50_shb':      'ResNet50+FC (SHB)',
+    'transcrowd_sha':    'TransCrowd (SHA)',
+    'transcrowd_shb':    'TransCrowd (SHB)',
     'bl_sha':            'Bayesian-Loss (SHA)',
+    'bl_shb':            'Bayesian-Loss (SHB)',
     'dmcount_sha':       'DM-Count (SHA)',
+    'dmcount_shb':       'DM-Count (SHB)',
     'p2pnet_sha':        'P2PNet (SHA)',
+    'p2pnet_shb':        'P2PNet (SHB)',
     'cltr_sha':          'CLTR (SHA)',
+    'cltr_shb':          'CLTR (SHB)',
 }
 
 VAL_PATTERN = re.compile(
@@ -57,11 +66,12 @@ def parse_log(path):
 
 
 def main():
+
     parser = argparse.ArgumentParser(description='Plot MAE/MSE training curves from log files')
     parser.add_argument('--log-dir', default='logs/',
                         help='directory containing .log files (default: logs/)')
-    parser.add_argument('--output', default='plots/training_curves.png',
-                        help='output image path (default: plots/training_curves.png)')
+    parser.add_argument('--output', default=None,
+                        help='output image path (auto-named if not specified)')
     parser.add_argument('--models', nargs='+', default=None,
                         help='subset of model keys to plot (e.g. csrnet mcnn vgg16_unified)')
     args = parser.parse_args()
@@ -90,8 +100,21 @@ def main():
         print('No data to plot. Check --log-dir and that training has produced VAL log lines.')
         sys.exit(0)
 
-    # Layout: 2 columns (MAE | MSE) per model
+    # Determine output filename
     n_models = len(data)
+    if args.output:
+        output_path = args.output
+    else:
+        if args.models is None:
+            output_path = 'plots/all.png'
+        elif n_models == 1:
+            output_path = f"plots/{list(data.keys())[0]}.png"
+        elif n_models == len(LOG_FILES):
+            output_path = 'plots/all.png'
+        else:
+            output_path = f"plots/{n_models}.png"
+
+    # Layout: 2 columns (MAE | MSE) per model
     n_cols = 2
     n_rows = n_models
     fig, axes = plt.subplots(n_rows, n_cols, figsize=(14, 4 * n_rows), squeeze=False)
@@ -126,9 +149,9 @@ def main():
         ax_mse.grid(True, alpha=0.3)
 
     plt.tight_layout()
-    os.makedirs(os.path.dirname(os.path.abspath(args.output)), exist_ok=True)
-    plt.savefig(args.output, dpi=150, bbox_inches='tight')
-    print(f'Saved plot to {args.output}')
+    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+    plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    print(f'Saved plot to {output_path}')
 
 
 if __name__ == '__main__':
