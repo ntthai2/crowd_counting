@@ -69,7 +69,7 @@ def get_args_parser():
                         help='start epoch')
     parser.add_argument('--eval', action='store_true')
     parser.add_argument('--num_workers', default=8, type=int)
-    parser.add_argument('--eval_freq', default=5, type=int,
+    parser.add_argument('--eval_freq', default=1, type=int,
                         help='frequency of evaluation, default setting is evaluating in every 5 epoch')
     parser.add_argument('--patience', default=50, type=int,
                         help='early stopping patience in training epochs')
@@ -217,7 +217,7 @@ def main(args):
                 }, checkpoint_best_path)
                 epochs_no_improve = 0
             else:
-                epochs_no_improve += args.eval_freq
+                epochs_no_improve += 1
             if epochs_no_improve >= args.patience:
                 print(f'Early stopping at epoch {epoch}')
                 break

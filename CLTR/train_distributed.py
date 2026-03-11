@@ -138,14 +138,14 @@ def main(args):
                 if is_best:
                     epochs_no_improve = 0
                 else:
-                    epochs_no_improve += args['test_per_epoch']
+                    epochs_no_improve += 1
             else:
                 is_best = pred_mae < args['best_pred']
                 args['best_pred'] = min(pred_mae, args['best_pred'])
                 if is_best:
                     epochs_no_improve = 0
                 else:
-                    epochs_no_improve += args['test_per_epoch']
+                    epochs_no_improve += 1
 
             print(f"VAL epoch={epoch} mae={pred_mae:.2f} mse={pred_mse:.2f} best_mae={args['best_pred']:.2f}")
 

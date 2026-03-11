@@ -110,7 +110,7 @@ def main(args):
         train(train_data, model, criterion, optimizer, epoch, args, scheduler)
         end1 = time.time()
 
-        if epoch % 5 == 0 and epoch >= 10:
+        if epoch >= 0:
             prec1 = validate(test_data, model, args)
             end2 = time.time()
             val_mae, val_mse = prec1
@@ -130,7 +130,7 @@ def main(args):
             if is_best:
                 epochs_no_improve = 0
             else:
-                epochs_no_improve += 5  # val runs every 5 epochs
+                epochs_no_improve += 1
             if epochs_no_improve >= args['patience']:
                 print(f"Early stopping: val MAE has not improved for {args['patience']} epochs. "
                       f"Best MAE: {args['best_pred']:.3f}")

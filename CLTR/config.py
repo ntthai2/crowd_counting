@@ -57,7 +57,7 @@ parser.add_argument('--min_num', type=int, default=-1,
                     help='min_num')
 parser.add_argument('--num_knn', type=int, default=4,
                     help='number of knn')
-parser.add_argument('--test_per_epoch', type=int, default=20,
+parser.add_argument('--test_per_epoch', type=int, default=1,
                     help='test_per_epoch')
 parser.add_argument('--patience', type=int, default=50,
                     help='early stopping patience in training epochs')
