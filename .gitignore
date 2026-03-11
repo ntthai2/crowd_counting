@@ -3,6 +3,8 @@
 /__pycache__
 /logs
 /PretrainedModels
+/ProcessedData
+/runs
 *.log
 *.mp4
 *.pth

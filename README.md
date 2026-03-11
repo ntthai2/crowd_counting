@@ -12,7 +12,7 @@ Crowd counting — estimating the number of people in an image — is a core tas
 - **Point-based detection** (P2PNet, CLTR): directly regress head coordinates, then derive the count by aggregation.
 - **Global regression** (TransCrowd, VGG16+FC, ResNet50+FC): map the whole image directly to a scalar count without spatial supervision.
 
-Experiments are run in two phases: (1) a **merged unified dataset** covering ShanghaiTech A/B, UCF-QNRF, Unidata, and mall, plus (2) **individual standard benchmarks** to allow comparison with reported numbers in the literature.
+All ten models are evaluated on the two ShanghaiTech benchmarks: **Part A** (dense urban crowds, 33–3,139 people) and **Part B** (sparse suburban crowds, 9–578 people). The two datasets are complementary in difficulty and are the standard shared benchmark across virtually all crowd counting publications, enabling direct comparison to reported baselines.
 
 ---
 
@@ -35,17 +35,23 @@ Experiments are run in two phases: (1) a **merged unified dataset** covering Sha
 
 ## Datasets
 
-| Dataset | Images | Count range | Annotation | Used for |
+| Dataset | Images | Count range | Annotation | Status |
 |---|---|---|---|---|
-| ShanghaiTech A | 482 (300+182) | 33–3139 | Point (`.mat`) | Phase 1 (merged) + Phase 2 |
-| ShanghaiTech B | 716 (400+316) | 9–578 | Point (`.mat`) | Phase 1 (merged) + Phase 2 |
-| UCF-QNRF | 1,535 (1201+334) | 49–12,865 | Point (`_ann.mat`) | Phase 1 (merged) + Phase 2 |
-| UCF-CC-50 | 50 (5-fold CV) | 94–4,543 | Point (`_ann.mat`) | Phase 2 only |
-| Unidata | ~500 | varies | JSON keypoint | Phase 1 (merged) |
-| mall | 2,000 | 13–53 | Point-per-frame (`.mat`) | Phase 1 (merged) |
-| JHU-Crowd++ | 4,372 (2272+500+1600) | 0–25,791 | Head-center + size (`.txt`) | Phase 3 (deferred) |
+| ShanghaiTech A | 482 (300+182) | 33–3,139 | Point (`.mat`) | ✅ Used |
+| ShanghaiTech B | 716 (400+316) | 9–578 | Point (`.mat`) | ✅ Used |
+| UCF-QNRF | 1,535 (1201+334) | 49–12,865 | Point (`_ann.mat`) | ❌ Excluded |
+| UCF-CC-50 | 50 (5-fold CV) | 94–4,543 | Point (`_ann.mat`) | ❌ Excluded |
+| Unidata | 20 | varies | JSON keypoint | ❌ Excluded |
+| mall | 2,000 | 13–53 | Point-per-frame (`.mat`) | ❌ Excluded |
+| JHU-Crowd++ | 4,372 (2272+500+1600) | 0–25,791 | Head-center + size (`.txt`) | ❌ Excluded |
 
-> UCF-CC-50 is excluded from the merged split because its 5-fold cross-validation protocol would be distorted by mixing with other datasets. JHU-Crowd++ is deferred to Phase 3: the dataset is very large (4,372 images, up to 25,791 heads) and the annotations include many occluded/low-confidence heads that reduce training signal reliability.
+SHA and SHB are trained and evaluated independently using their standard splits, matching the protocol used in the original publications. This allows direct comparison to reported baselines.
+
+Excluded datasets:
+- **UCF-QNRF**: images contain up to 12,865 people and are extremely large; training is slow and the insight ("models struggle at extreme density") is expected and not actionable.
+- **UCF-CC-50**: only 50 images with 5-fold cross-validation — methodologically complex, adds overhead, and provides no insight beyond QNRF.
+- **Unidata**: 20 images — too small to draw statistically meaningful conclusions.
+- **mall**: max 53 people per frame — trivially easy for any modern model; differences would be noise.
 
 ---
 
@@ -102,107 +108,41 @@ pip install nni               # TransCrowd (NNI for hyperparameter search)
 
 See [EXPERIMENTS.md](EXPERIMENTS.md) for all preprocessing commands, implementation details, and progress tracking.
 
-Experiments are run in two phases:
-- **Phase 1**: merged unified dataset (ShanghaiTech A+B, UCF-QNRF, Unidata, mall), 70/15/15 split, seed 42.
-- **Phase 2**: each model re-trained on individual standard splits (SHA, SHB, QNRF, UCF-CC-50 5-fold).
-- **Phase 3** *(future)*: JHU-Crowd++, YOLO, RF-DETR, RT-DETR.
+Each model is trained and evaluated twice — once on SHA and once on SHB — using the standard train/test splits from the original dataset releases. All ten models share the same training protocol: Adam optimizer, early stopping with patience=50, best checkpoint retained.
 
 ---
 
 ## Results
 
-### Phase 1 — Unified dataset (MAE / MSE)
+### ShanghaiTech Part A (MAE / MSE)
 
-| Model | MAE ↓ | MSE ↓ |
-|---|---|---|
-| MCNN | | |
-| CSRNet | | |
-| BL | | |
-| DM-Count | | |
-| P2PNet | | |
-| CLTR | | |
-| STEERER | | |
-| TransCrowd (token) | | |
-| TransCrowd (gap) | | |
-| VGG16+FC | | |
-| ResNet50+FC | | |
+| Model | Family | MAE ↓ | MSE ↓ | Published MAE |
+|---|---|---|---|---|
+| MCNN | Density map | | | 110.2 |
+| CSRNet | Density map | | | 68.2 |
+| BL | Density map | | | 62.8 |
+| DM-Count | Density map | | | 59.7 |
+| STEERER | Density map | | | 56.0 |
+| P2PNet | Point detection | | | 52.7 |
+| CLTR | Point detection | | | 56.9 |
+| TransCrowd | Regression | | | 66.1 |
+| VGG16+FC | Regression | | | — |
+| ResNet50+FC | Regression | | | — |
 
-### Phase 2 — Individual benchmarks (MAE / MSE)
+### ShanghaiTech Part B (MAE / MSE)
 
-#### ShanghaiTech Part A
-
-| Model | MAE ↓ | MSE ↓ |
-|---|---|---|
-| MCNN | | |
-| CSRNet | | |
-| BL | | |
-| DM-Count | | |
-| P2PNet | | |
-| CLTR | | |
-| STEERER | | |
-| TransCrowd | | |
-| VGG16+FC | | |
-| ResNet50+FC | | |
-
-#### ShanghaiTech Part B
-
-| Model | MAE ↓ | MSE ↓ |
-|---|---|---|
-| MCNN | | |
-| CSRNet | | |
-| BL | | |
-| DM-Count | | |
-| P2PNet | | |
-| CLTR | | |
-| STEERER | | |
-| TransCrowd | | |
-| VGG16+FC | | |
-| ResNet50+FC | | |
-
-#### UCF-QNRF
-
-| Model | MAE ↓ | MSE ↓ |
-|---|---|---|
-| MCNN | | |
-| CSRNet | | |
-| BL | | |
-| DM-Count | | |
-| P2PNet | | |
-| CLTR | | |
-| STEERER | | |
-| TransCrowd | | |
-| VGG16+FC | | |
-| ResNet50+FC | | |
-
-#### UCF-CC-50 (5-fold mean ± std)
-
-| Model | MAE ↓ | MSE ↓ |
-|---|---|---|
-| MCNN | | |
-| CSRNet | | |
-| BL | | |
-| DM-Count | | |
-| P2PNet | | |
-| CLTR | | |
-| STEERER | | |
-| TransCrowd | | |
-| VGG16+FC | | |
-| ResNet50+FC | | |
-
-#### JHU-Crowd++
-
-| Model | MAE ↓ | MSE ↓ |
-|---|---|---|
-| MCNN | | |
-| CSRNet | | |
-| BL | | |
-| DM-Count | | |
-| P2PNet | | |
-| CLTR | | |
-| STEERER | | |
-| TransCrowd | | |
-| VGG16+FC | | |
-| ResNet50+FC | | |
+| Model | Family | MAE ↓ | MSE ↓ | Published MAE |
+|---|---|---|---|---|
+| MCNN | Density map | | | 26.4 |
+| CSRNet | Density map | | | 10.6 |
+| BL | Density map | | | 7.7 |
+| DM-Count | Density map | | | 7.4 |
+| STEERER | Density map | | | 6.5 |
+| P2PNet | Point detection | | | 6.7 |
+| CLTR | Point detection | | | 6.5 |
+| TransCrowd | Regression | | | 8.1 |
+| VGG16+FC | Regression | | | — |
+| ResNet50+FC | Regression | | | — |
 
 ---
 
