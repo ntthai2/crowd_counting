@@ -1,9 +1,0 @@
-# created by virtualenv automatically
-/__pycache__/*
-*.o
-*.e
-*.out
-job/
-exp/
-scale_generalization/
-.vscode/

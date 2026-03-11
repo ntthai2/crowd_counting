@@ -33,16 +33,10 @@ LOG_FILES = {
     'dmcount_shb':       'DM-Count (SHB)',
     'p2pnet_sha':        'P2PNet (SHA)',
     'p2pnet_shb':        'P2PNet (SHB)',
-    'cltr_sha':          'CLTR (SHA)',
-    'cltr_shb':          'CLTR (SHB)',
-    'steerer_sha':       'STEERER (SHA)',
-    'steerer_shb':       'STEERER (SHB)',
     'vgg16_sha':         'VGG16+FC (SHA)',
     'vgg16_shb':         'VGG16+FC (SHB)',
     'resnet50_sha':      'ResNet50+FC (SHA)',
     'resnet50_shb':      'ResNet50+FC (SHB)',
-    'transcrowd_sha':    'TransCrowd (SHA)',
-    'transcrowd_shb':    'TransCrowd (SHB)',
 }
 
 VAL_PATTERN = re.compile(
