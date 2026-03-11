@@ -2,6 +2,7 @@
 /.vscode
 /__pycache__
 /logs
+/PretrainedModels
 *.log
 *.mp4
 *.pth
