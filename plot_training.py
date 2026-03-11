@@ -23,16 +23,10 @@ import matplotlib.pyplot as plt
 
 # Map log file stem -> display name
 LOG_FILES = {
-    'csrnet_sha':        'CSRNet (SHA)',
-    'csrnet_shb':        'CSRNet (SHB)',
     'mcnn_sha':          'MCNN (SHA)',
     'mcnn_shb':          'MCNN (SHB)',
-    'vgg16_sha':         'VGG16+FC (SHA)',
-    'vgg16_shb':         'VGG16+FC (SHB)',
-    'resnet50_sha':      'ResNet50+FC (SHA)',
-    'resnet50_shb':      'ResNet50+FC (SHB)',
-    'transcrowd_sha':    'TransCrowd (SHA)',
-    'transcrowd_shb':    'TransCrowd (SHB)',
+    'csrnet_sha':        'CSRNet (SHA)',
+    'csrnet_shb':        'CSRNet (SHB)',
     'bl_sha':            'Bayesian-Loss (SHA)',
     'bl_shb':            'Bayesian-Loss (SHB)',
     'dmcount_sha':       'DM-Count (SHA)',
@@ -41,6 +35,14 @@ LOG_FILES = {
     'p2pnet_shb':        'P2PNet (SHB)',
     'cltr_sha':          'CLTR (SHA)',
     'cltr_shb':          'CLTR (SHB)',
+    'steerer_sha':       'STEERER (SHA)',
+    'steerer_shb':       'STEERER (SHB)',
+    'vgg16_sha':         'VGG16+FC (SHA)',
+    'vgg16_shb':         'VGG16+FC (SHB)',
+    'resnet50_sha':      'ResNet50+FC (SHA)',
+    'resnet50_shb':      'ResNet50+FC (SHB)',
+    'transcrowd_sha':    'TransCrowd (SHA)',
+    'transcrowd_shb':    'TransCrowd (SHB)',
 }
 
 VAL_PATTERN = re.compile(
