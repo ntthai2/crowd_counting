@@ -85,9 +85,10 @@ class listDataset(Dataset):
             m = int(width / 384)
             n = int(height / 384)
 
-            # If image is smaller than 384 in either dim, use the whole image
+            # If image is smaller than 384 in either dim, resize to 384x384
             if m == 0 or n == 0:
-                return fname, img.cuda().unsqueeze(0), gt_count
+                img_resized = F.interpolate(img.unsqueeze(0), size=(384, 384), mode='bilinear', align_corners=False)
+                return fname, img_resized.cuda(), gt_count
 
             for i in range(0, m):
                 for j in range(0, n):
