@@ -1,6 +1,4 @@
-# Experiments Log — Crowd Counting Course Project
-
-> **Read this file first every session. All verified commands live here.**
+# Experiments Log
 >
 > Python: `/home/team_cam_ai/miniconda3/envs/ntt_det/bin/python` (3.13.5)
 > PyTorch 2.7.1 · torchvision 0.22.1+cu128 · CUDA 12.8 · single GPU
@@ -11,7 +9,9 @@
 
 ## Strategy
 
-Train **10 crowd-counting models** on **ShanghaiTech A (SHA)** and **ShanghaiTech B (SHB)** separately, producing two result tables for direct comparison against published baselines.
+Train **7 crowd-counting models** on **ShanghaiTech A (SHA)** and **ShanghaiTech B (SHB)** separately, producing two result tables for direct comparison against published baselines.
+
+**Models dropped:** CLTR, STEERER, TransCrowd (transformer-based; unstable training, modest results).
 
 | Dataset | Images | Count range | Density |
 |---|---|---|---|
@@ -29,11 +29,8 @@ Train **10 crowd-counting models** on **ShanghaiTech A (SHA)** and **ShanghaiTec
 | 3 | BL (Bayesian Loss) | Density map | `Bayesian-Loss/` | `Bayesian-Loss/train.py` |
 | 4 | DM-Count | Density map | `DM-Count/` | `DM-Count/train.py` |
 | 5 | P2PNet | Point detection | `P2PNet/` | `P2PNet/train.py` |
-| 6 | CLTR | Point detection | `CLTR/` | `CLTR/train_distributed.py` |
-| 7 | STEERER | Density map | `STEERER/` | `STEERER/tools/train_cc.py` |
-| 8 | TransCrowd | Regression (ViT) | `TransCrowd/` | `TransCrowd/train.py --model_type gap` |
-| 9 | VGG16+FC | Regression (CNN) | `TransCrowd/` | `TransCrowd/train.py --model_type vgg16` |
-| 10 | ResNet50+FC | Regression (CNN) | `TransCrowd/` | `TransCrowd/train.py --model_type resnet50` |
+| 6 | VGG16+FC | Regression (CNN) | root | `train_regressor.py --model-type vgg16` |
+| 7 | ResNet50+FC | Regression (CNN) | root | `train_regressor.py --model-type resnet50` |
 
 ---
 
@@ -48,22 +45,13 @@ Train **10 crowd-counting models** on **ShanghaiTech A (SHA)** and **ShanghaiTec
 3. **P2PNet requires pre-creating the output directory before running.**
    The script opens a log file inside `--output_dir` without creating it first. Always run `mkdir -p logs/p2pnet_sha_ckpts` before the training command.
 
-4. **CLTR, TransCrowd, and STEERER must be run from their own subdirectory.**
-   They reference relative paths like `./npydata/` or `../ProcessedData/`. Always `cd` into the model directory first — passing absolute paths as flags is not sufficient.
-
-5. **STEERER requires `--cfg-options gpus="(0,)"` for single-GPU training.**
-   The default config has `gpus = (0, 1,)`. Override it at the command line or training will fail to initialize correctly.
-
-6. **STEERER checkpoints go to `STEERER/exp/SHHA/.../`** (relative to the STEERER directory).
-   To resume, set `resume_path` inside `configs/SHHA_final.py` to the run directory containing `checkpoint.pth.tar`, then re-run normally.
-
-7. **VAL log format is uniform across all models:**
+4. **VAL log format is uniform across all models:**
    ```
    VAL epoch=XXX mae=XX.XX mse=XX.XX best_mae=XX.XX
    ```
    Monitor progress with: `grep "^VAL" logs/<model>.log | tail -5`
 
-8. **Early stopping** is enabled with patience=50 in all models.
+5. **Early stopping** is enabled with patience=50 in all models.
 
 ---
 
@@ -76,9 +64,6 @@ Train **10 crowd-counting models** on **ShanghaiTech A (SHA)** and **ShanghaiTec
 | BL | `logs/bl_<ds>_ckpts/best_model.pth` |
 | DM-Count | `logs/dmcount_<ds>_ckpts/best_model.pth` |
 | P2PNet | `logs/p2pnet_<ds>_ckpts/best_mae.pth` |
-| CLTR | `logs/cltr_<ds>_ckpts/model_best.pth` |
-| STEERER | `STEERER/exp/SHHA/MocHRBackbone_hrnet48/<run>/checkpoint.pth.tar` |
-| TransCrowd | `logs/transcrowd_<ds>_ckpts/model_best.pth` |
 | VGG16+FC | `logs/vgg16_<ds>_ckpts/model_best.pth` |
 | ResNet50+FC | `logs/resnet50_<ds>_ckpts/model_best.pth` |
 
@@ -93,11 +78,8 @@ Train **10 crowd-counting models** on **ShanghaiTech A (SHA)** and **ShanghaiTec
 | BL | 1e-5 | 5 | 500 | Adam | crop=128 for SHA; default 512 for SHB |
 | DM-Count | 1e-4 | 8 | 500 | Adam | VGG19 backbone |
 | P2PNet | 1e-4 (backbone 1e-5) | 8 | 3500 | AdamW | lr_drop=3500 |
-| CLTR | 1e-4 | 4 | 2000 | Adam | crop_size=256 |
-| STEERER | config-driven | 6 | 600 | AdamW | HRNet-W48; 10-epoch warmup |
-| TransCrowd | 1e-5 | 8 | 1000 | Adam | ViT-S/16 backbone |
-| VGG16+FC | 1e-4 | 8 | 1000 | Adam | ImageNet pretrained VGG16 |
-| ResNet50+FC | 1e-4 | 8 | 1000 | Adam | ImageNet pretrained ResNet50 |
+| VGG16+FC | 1e-4 | 8 | 1000 | Adam | ImageNet pretrained; input 448×448; MSE loss |
+| ResNet50+FC | 1e-4 | 8 | 1000 | Adam | ImageNet pretrained; input 448×448; MSE loss |
 
 ---
 
@@ -156,45 +138,19 @@ nohup $PYTHON -u $BASE/P2PNet/train.py \
   --epochs 3500 --lr 1e-4 --gpu_id 0 \
   > $BASE/logs/p2pnet_sha.log 2>&1 &
 
-# ─── 6. CLTR SHA ─────────────────────────────────────────────────────────────
-# NOTE: must cd into CLTR/ first (uses relative ./npydata/ paths)
-nohup bash -c "cd $BASE/CLTR && $PYTHON -u train_distributed.py \
-  --dataset sha \
-  --save_path ../logs/cltr_sha_ckpts \
-  --epochs 2000 --gpu_id 0" \
-  > $BASE/logs/cltr_sha.log 2>&1 &
+# ─── 6. VGG16+FC SHA ─────────────────────────────────────────────────────────
+nohup $PYTHON -u $BASE/train_regressor.py \
+  --dataset ShanghaiB --data-dir $BASE/data/ShanghaiTech/part_A \
+  --save-dir $BASE/logs/vgg16_shb_ckpts --model-type vgg16 \
+  --epochs 1000 --lr 1e-4 --batch-size 8 --gpu 0 \
+  > $BASE/logs/vgg16_shb.log 2>&1 &
 
-# ─── 7. STEERER SHA ──────────────────────────────────────────────────────────
-# NOTE: must cd into STEERER/ first; gpus override required for single GPU
-nohup bash -c "cd $BASE/STEERER && $PYTHON tools/train_cc.py \
-  --cfg configs/SHHA_final.py \
-  --cfg-options gpus=\"(0,)\"" \
-  > $BASE/logs/steerer_sha.log 2>&1 &
-
-# ─── 8. TransCrowd SHA (ViT-S/16) ────────────────────────────────────────────
-# NOTE: must cd into TransCrowd/ first
-nohup bash -c "cd $BASE/TransCrowd && $PYTHON -u train.py \
-  --dataset ShanghaiA \
-  --save_path ../logs/transcrowd_sha_ckpts \
-  --model_type gap \
-  --epochs 1000 --lr 1e-5 --gpu_id 0" \
-  > $BASE/logs/transcrowd_sha.log 2>&1 &
-
-# ─── 9. VGG16+FC SHA ─────────────────────────────────────────────────────────
-nohup bash -c "cd $BASE/TransCrowd && $PYTHON -u train.py \
-  --dataset ShanghaiA \
-  --save_path ../logs/vgg16_sha_ckpts \
-  --model_type vgg16 \
-  --epochs 1000 --lr 1e-4 --gpu_id 0" \
-  > $BASE/logs/vgg16_sha.log 2>&1 &
-
-# ─── 10. ResNet50+FC SHA ─────────────────────────────────────────────────────
-nohup bash -c "cd $BASE/TransCrowd && $PYTHON -u train.py \
-  --dataset ShanghaiA \
-  --save_path ../logs/resnet50_sha_ckpts \
-  --model_type resnet50 \
-  --epochs 1000 --lr 1e-4 --gpu_id 0" \
-  > $BASE/logs/resnet50_sha.log 2>&1 &
+# ─── 7. ResNet50+FC SHA ─────────────────────────────────────────────────────
+nohup $PYTHON -u $BASE/train_regressor.py \
+  --dataset ShanghaiB --data-dir $BASE/data/ShanghaiTech/part_A \
+  --save-dir $BASE/logs/resnet50_shb_ckpts --model-type resnet50 \
+  --epochs 1000 --lr 1e-4 --batch-size 8 --gpu 0 \
+  > $BASE/logs/resnet50_shb.log 2>&1 &
 ```
 
 ---
@@ -250,41 +206,18 @@ nohup $PYTHON -u $BASE/P2PNet/train.py \
   --epochs 3500 --lr 1e-4 --gpu_id 0 \
   > $BASE/logs/p2pnet_shb.log 2>&1 &
 
-# ─── 6. CLTR SHB ─────────────────────────────────────────────────────────────
-nohup bash -c "cd $BASE/CLTR && $PYTHON -u train_distributed.py \
-  --dataset shb \
-  --save_path ../logs/cltr_shb_ckpts \
-  --epochs 2000 --gpu_id 0" \
-  > $BASE/logs/cltr_shb.log 2>&1 &
-
-# ─── 7. STEERER SHB ──────────────────────────────────────────────────────────
-nohup bash -c "cd $BASE/STEERER && $PYTHON tools/train_cc.py \
-  --cfg configs/SHHB_final.py \
-  --cfg-options gpus=\"(0,)\"" \
-  > $BASE/logs/steerer_shb.log 2>&1 &
-
-# ─── 8. TransCrowd SHB ───────────────────────────────────────────────────────
-nohup bash -c "cd $BASE/TransCrowd && $PYTHON -u train.py \
-  --dataset ShanghaiB \
-  --save_path ../logs/transcrowd_shb_ckpts \
-  --model_type gap \
-  --epochs 1000 --lr 1e-5 --gpu_id 0" \
-  > $BASE/logs/transcrowd_shb.log 2>&1 &
-
-# ─── 9. VGG16+FC SHB ─────────────────────────────────────────────────────────
-nohup bash -c "cd $BASE/TransCrowd && $PYTHON -u train.py \
-  --dataset ShanghaiB \
-  --save_path ../logs/vgg16_shb_ckpts \
-  --model_type vgg16 \
-  --epochs 1000 --lr 1e-4 --gpu_id 0" \
+# ─── 6. VGG16+FC SHB ─────────────────────────────────────────────────────────
+nohup $PYTHON -u $BASE/train_regressor.py \
+  --dataset ShanghaiB --data-dir $BASE/data/ShanghaiTech/part_B \
+  --save-dir $BASE/logs/vgg16_shb_ckpts --model-type vgg16 \
+  --epochs 1000 --lr 1e-4 --batch-size 8 --gpu 0 \
   > $BASE/logs/vgg16_shb.log 2>&1 &
 
-# ─── 10. ResNet50+FC SHB ─────────────────────────────────────────────────────
-nohup bash -c "cd $BASE/TransCrowd && $PYTHON -u train.py \
-  --dataset ShanghaiB \
-  --save_path ../logs/resnet50_shb_ckpts \
-  --model_type resnet50 \
-  --epochs 1000 --lr 1e-4 --gpu_id 0" \
+# ─── 7. ResNet50+FC SHB ─────────────────────────────────────────────────────
+nohup $PYTHON -u $BASE/train_regressor.py \
+  --dataset ShanghaiB --data-dir $BASE/data/ShanghaiTech/part_B \
+  --save-dir $BASE/logs/resnet50_shb_ckpts --model-type resnet50 \
+  --epochs 1000 --lr 1e-4 --batch-size 8 --gpu 0 \
   > $BASE/logs/resnet50_shb.log 2>&1 &
 ```
 
@@ -301,22 +234,22 @@ These extend the training commands with a checkpoint flag. Append to whichever d
 | BL | `--resume <ckpt>` | `logs/bl_<ds>_ckpts/best_model.pth` |
 | DM-Count | `--resume <ckpt>` | `logs/dmcount_<ds>_ckpts/best_model.pth` |
 | P2PNet | `--resume <ckpt>` | `logs/p2pnet_<ds>_ckpts/best_mae.pth` |
-| CLTR | `--pre <ckpt>` | `logs/cltr_<ds>_ckpts/model_best.pth` |
-| STEERER | edit config `resume_path=` | `STEERER/exp/SHHA/.../checkpoint.pth.tar` |
-| TransCrowd/VGG16/ResNet50 | `--pre <ckpt>` | `logs/<model>_<ds>_ckpts/model_best.pth` |
+| VGG16+FC | `--resume <ckpt>` | `logs/vgg16_<ds>_ckpts/checkpoint.pth` |
+| ResNet50+FC | `--resume <ckpt>` | `logs/resnet50_<ds>_ckpts/checkpoint.pth` |
 
-**STEERER resume**: open `configs/SHHA_final.py` (or `SHHB_final.py`), set `resume_path='exp/SHHA/MocHRBackbone_hrnet48/<run_dir>'`, then run the normal training command.
-
-**Example — resume CLTR SHA:**
+**Example — resume P2PNet SHA:**
 ```bash
 BASE=/ssd1/team_cam_ai/ntthai/crowd_counting
 PYTHON=/home/team_cam_ai/miniconda3/envs/ntt_det/bin/python
-nohup bash -c "cd $BASE/CLTR && $PYTHON -u train_distributed.py \
-  --dataset sha \
-  --save_path ../logs/cltr_sha_ckpts \
-  --epochs 2000 --gpu_id 0 \
-  --pre ../logs/cltr_sha_ckpts/model_best.pth" \
-  > $BASE/logs/cltr_sha.log 2>&1 &
+mkdir -p $BASE/logs/p2pnet_sha_ckpts
+nohup $PYTHON -u $BASE/P2PNet/train.py \
+  --dataset_file SHHA \
+  --data_root $BASE/data/ShanghaiTech/part_A \
+  --output_dir $BASE/logs/p2pnet_sha_ckpts \
+  --checkpoints_dir $BASE/logs/p2pnet_sha_ckpts \
+  --epochs 3500 --lr 1e-4 --gpu_id 0 \
+  --resume $BASE/logs/p2pnet_sha_ckpts/best_mae.pth \
+  > $BASE/logs/p2pnet_sha.log 2>&1 &
 ```
 
 ---
@@ -338,94 +271,49 @@ grep "^VAL" $BASE/logs/*.log | sort
 
 # Follow a single log live
 tail -f $BASE/logs/mcnn_sha.log
-
-# Plot MAE/MSE curves for all completed runs
-cd $BASE
-$PYTHON plot_training.py --log-dir logs/ --output plots/training_curves.png
 ```
 
 ---
 
 ## Results
 
-Fill in after training completes. Lower is better for both MAE and MSE.
+Lower is better for both MAE and MSE.
 
 ### ShanghaiTech A
 
-| Model | MAE | MSE |
-|---|---|---|
-| MCNN | — | — |
-| CSRNet | — | — |
-| BL | — | — |
-| DM-Count | — | — |
-| P2PNet | — | — |
-| CLTR | — | — |
-| STEERER | — | — |
-| TransCrowd | — | — |
-| VGG16+FC | — | — |
-| ResNet50+FC | — | — |
+| Model | MAE | MSE | Published MAE |
+|---|---|---|---|
+| MCNN | 131.47 | 202.50 | 110.2 |
+| CSRNet | 70.15 | 109.17 | 68.2 |
+| BL | 66.34 | 100.65 | 62.8 |
+| DM-Count | 65.88 | 104.70 | 59.7 |
+| P2PNet | 58.09 | 95.27 | 52.7 |
+| VGG16+FC | 🔄 | 🔄 | — |
+| ResNet50+FC | 🔄 | 🔄 | — |
 
 ### ShanghaiTech B
 
-| Model | MAE | MSE |
-|---|---|---|
-| MCNN | — | — |
-| CSRNet | — | — |
-| BL | — | — |
-| DM-Count | — | — |
-| P2PNet | — | — |
-| CLTR | — | — |
-| STEERER | — | — |
-| TransCrowd | — | — |
-| VGG16+FC | — | — |
-| ResNet50+FC | — | — |
-
----
-
-## Training Status
-
-| Model | SHA | SHB |
-|---|---|---|
-| MCNN | ⏳ | ⏳ |
-| CSRNet | ⏳ | ⏳ |
-| BL | ⏳ | ⏳ |
-| DM-Count | ⏳ | ⏳ |
-| P2PNet | ⏳ | ⏳ |
-| CLTR | ⏳ | ⏳ |
-| STEERER | ⏳ | ⏳ |
-| TransCrowd | ⏳ | ⏳ |
-| VGG16+FC | ⏳ | ⏳ |
-| ResNet50+FC | ⏳ | ⏳ |
+| Model | MAE | MSE | Published MAE |
+|---|---|---|---|
+| MCNN | 30.79 | 46.92 | 26.4 |
+| CSRNet | 10.46 | 16.90 | 10.6 |
+| BL | 8.10 | 13.45 | 7.7 |
+| DM-Count | 8.85 | 13.64 | 7.4 |
+| P2PNet | 9.26 | 16.53 | 6.7 |
+| VGG16+FC | 🔄 | 🔄 | — |
+| ResNet50+FC | 🔄 | 🔄 | — |
 
 ---
 
 ## Codebase Notes
 
-### Bug Fixes Applied (do not revert)
+### Bug Fixes Applied
 
 | File | Fix |
 |---|---|
 | `P2PNet/util/misc.py` | `float(torchvision.__version__[:3])` → tuple comparison; fixes crash with torchvision 0.22 |
 | `P2PNet/models/vgg_.py` | Fall back to `torch.hub.load_state_dict_from_url` when hardcoded private weight path is absent |
-| `TransCrowd/train.py` | All `np.load()` calls updated to `np.load(..., allow_pickle=True)` (Python 3.13 changed default) |
 | `DM-Count/train_helper.py` | Moved VAL print line to after `self.best_mae` update so it shows current best, not stale value |
-
-### Local Shims (replacing incompatible packages)
-
-`mmcv` 1.6.0 and `fvcore` cannot be installed on Python 3.13 (`pkgutil.ImpImporter` was removed).
-
-| Shim path | Provides |
-|---|---|
-| `CLTR/mmcv/` | `Config`, `DictAction`, `utils.get_logger` (auto-makedirs for log dirs) |
-| `STEERER/mmcv/` | `Config`, `DictAction`, `runner.BaseModule` |
-| `STEERER/fvcore/` | Stub `flop_count`, `parameter_count_table` (returns placeholders; training unaffected) |
-
-### Required Symlinks
-
-| Symlink | Points to | Required by |
-|---|---|---|
-| `ProcessedData` | `data/steerer` | STEERER configs (`root='../ProcessedData/SHHA/'`) |
-| `PretrainedModels` | `/ssd1/team_cam_ai/ntthai/PretrainedModels` | STEERER backbone weights |
 
 ### Data Layout Reference
 
@@ -436,9 +324,7 @@ Fill in after training completes. Lower is better for both MAE and MSE.
 | BL | `data/ShanghaiTech/part_A/bl/train/` + `val/` | `part_B/bl/` same |
 | DM-Count | `data/ShanghaiTech/part_A/train/` + `val/` | `part_B/` same |
 | P2PNet | `P2PNet/crowd_datasets/SHHA/SHHA.list` | `SHHB/SHHB.list` |
-| CLTR | `CLTR/npydata/sha_train.npy`, `sha_val.npy` | `shb_train.npy`, `shb_val.npy` |
-| STEERER | `ProcessedData/SHHA/` via symlink | `ProcessedData/SHHB/` |
-| TransCrowd/VGG16/ResNet50 | `TransCrowd/npydata/ShanghaiA_{train,test,*_counts}.npy` | `ShanghaiB_*` same |
+| VGG16+FC / ResNet50+FC | `data/ShanghaiTech/part_A/` (raw) | `data/ShanghaiTech/part_B/` (raw) |
 
 ### Preprocessing Scripts (`preprocess/`)
 
@@ -449,12 +335,8 @@ These have all been run already. Only re-run if data is lost.
 | `gen_density_maps.py` | Gaussian `.npy` density maps for MCNN |
 | `gen_h5_density.py` | `.h5` density maps for CSRNet |
 | `gen_point_npy.py` | BL `(N,3)` + DM-Count `(N,2)` `.npy` point files |
-| `gen_cltr_h5.py` | CLTR `.h5` (image + keypoint map) |
-| `gen_cltr_lists.py` | CLTR `.npy` path lists in `CLTR/npydata/` |
 | `gen_csrnet_json.py` | CSRNet JSON file lists |
 | `gen_p2pnet_data.py` | P2PNet `.list` annotation files |
-| `gen_point_npy.py` | TransCrowd `.npy` path + count lists |
-| `gen_steerer_data.py` | STEERER JSON GT + split files |
 | `reorganise_bl_dm.py` | Reorganizes raw data into `train/` + `val/` for BL/DM-Count |
 
 ---
@@ -465,11 +347,13 @@ These have all been run already. Only re-run if data is lost.
 
 ### Background and Motivation
 
-The project aims to benchmark crowd-counting methods spanning three architectural families: **density-map regression**, **point detection**, and **global count regression**. Ten models were selected to give broad coverage:
+The project aims to benchmark crowd-counting methods spanning three architectural families: **density-map regression**, **point detection**, and **global count regression**. Seven models were ultimately evaluated:
 
-- *Density-map* (MCNN, CSRNet, BL, DM-Count, STEERER) — the mainstream approach; the network predicts a spatial density map whose integral gives the count.
-- *Point detection* (P2PNet, CLTR) — newer paradigm that predicts a discrete set of head locations instead of a smooth map.
-- *Count regression* (TransCrowd/ViT-S, VGG16+FC, ResNet50+FC) — global regression directly from image features; simpler baseline but lower accuracy.
+- *Density-map* (MCNN, CSRNet, BL, DM-Count) — the mainstream approach; the network predicts a spatial density map whose integral gives the count.
+- *Point detection* (P2PNet) — newer paradigm that predicts a discrete set of head locations instead of a smooth map.
+- *Count regression* (VGG16+FC, ResNet50+FC) — global regression directly from image features; simpler baseline but lower accuracy.
+
+Three additional transformer-based models (CLTR, STEERER, TransCrowd) were attempted but dropped: training was unstable and after hundreds of epochs results could not approach the density-map baselines, making the additional complexity unjustifiable within the project scope.
 
 ShanghaiTech A and B were chosen as the evaluation benchmarks because they are the universally-accepted standard for crowd counting, they are small enough to train on a single GPU in a reasonable time, and published MAE/MSE numbers are available for every model so comparisons are meaningful.
 
@@ -479,23 +363,15 @@ Initial work included downloading UCF-QNRF (4.3 GB raw + 45 GB preprocessed), th
 
 ### Environment Setup
 
-All models were run under a single shared Conda environment (`ntt_det`) with Python 3.13.5, PyTorch 2.7.1, and CUDA 12.8. This caused two immediate problems:
-
-**Problem 1 — `mmcv` incompatible with Python 3.13.**
-CLTR and STEERER both import `mmcv` for config parsing. The pip-installable `mmcv` 1.6.0 calls `pkgutil.ImpImporter`, which was removed in Python 3.12. The fix was to write minimal local `mmcv/` shim packages inside each model's directory providing only the symbols actually used (`Config`, `DictAction`, `runner.BaseModule`, `utils.get_logger`). This was preferable to downgrading Python or pinning an old environment.
-
-**Problem 2 — `fvcore` incompatible with Python 3.13.**
-STEERER uses `fvcore` for FLOP counting in a reporting utility. Installing `fvcore` fails on Python 3.13 for the same `pkgutil` reason. A stub `fvcore/` shim was placed inside `STEERER/` that returns placeholder strings from the counting functions. Training itself is unaffected; only the complexity report printed at startup is suppressed.
+All models were run under a single shared Conda environment (`ntt_det`) with Python 3.13.5, PyTorch 2.7.1, and CUDA 12.8.
 
 ### Code Fixes Required Before Training
 
-Beyond the environment shims, several bugs in the original model repositories had to be patched:
+Several bugs in the original model repositories had to be patched:
 
 **P2PNet torchvision version check** (`P2PNet/util/misc.py`): The code did `float(torchvision.__version__[:3])` which crashes when the version string starts with `0.22` (only one digit before the decimal in the substring). Fixed by comparing version tuples instead.
 
 **P2PNet VGG backbone weights** (`P2PNet/models/vgg_.py`): The model tried to load weights from a hardcoded private server path (`/public/home/...`). When that path does not exist on the training machine it raised a `FileNotFoundError` at import time. Fixed by adding a fallback to `torch.hub.load_state_dict_from_url` using the standard `torchvision` URL for VGG16-BN.
-
-**TransCrowd `np.load` pickle** (`TransCrowd/train.py`): Python 3.13 changed the default for `np.load` to `allow_pickle=False`. All `.npy` files in TransCrowd's data lists are object arrays (lists of dicts), so every load call crashed. Fixed by adding `allow_pickle=True` to all relevant `np.load` calls.
 
 **BL crop-size assertion on SHA** (`Bayesian-Loss/train.py`): The Bayesian-Loss trainer asserts that every image is at least as large as the crop size. 93 images in ShanghaiTech A are smaller than the default 512×512. Solved by adding `--crop-size 128` for SHA training only. SHB images are uniformly larger and do not need this flag.
 
@@ -503,21 +379,17 @@ Beyond the environment shims, several bugs in the original model repositories ha
 
 **DM-Count best-MAE display bug** (`DM-Count/train_helper.py`): The `VAL` log line was printed before `self.best_mae` was updated, so it always showed the previous epoch's best. Fixed by moving the print statement two lines down.
 
-**CLTR output directory auto-creation** (`CLTR/mmcv/utils.py`): The shim's `get_logger` was not creating the log directory automatically, which caused a crash on first run. Fixed by adding `os.makedirs(log_dir, exist_ok=True)` in the shim.
-
 ### Preprocessing Decisions
 
-**Density maps (adaptive Gaussian):** Rather than using fixed-sigma Gaussian density maps (as in the original CSRNet paper), an adaptive per-head sigma was used for all density-map models. The sigma for each annotated head is computed as the mean distance to its three nearest neighbours multiplied by 0.3, clamped to [2, 20] pixels. This is the standard practice for dense scenes. The same density map generation code (`gen_density_maps.py`, `gen_h5_density.py`, `gen_cltr_h5.py`) was used for all relevant models to ensure consistency.
+**Density maps (adaptive Gaussian):** Rather than using fixed-sigma Gaussian density maps (as in the original CSRNet paper), an adaptive per-head sigma was used for all density-map models. The sigma for each annotated head is computed as the mean distance to its three nearest neighbours multiplied by 0.3, clamped to [2, 20] pixels. This is the standard practice for dense scenes. The same density map generation code (`gen_density_maps.py`, `gen_h5_density.py`) was used for all relevant models to ensure consistency.
 
 **BL point format:** Bayesian-Loss requires a 3-column `.npy` file `[x, y, knn_dist]` where the third column is the mean k-NN distance used in the Bayesian uncertainty loss. This was computed in `gen_point_npy.py` with k=3, matching the BL paper.
 
 **DM-Count needs `train/` / `val/` split directories:** DM-Count's dataset loader globs for images in `<root>/train/` and `<root>/val/`. ShanghaiTech ships as `train_data/` and `test_data/` (no validation set is provided separately; researchers use the test set as validation). The `reorganise_bl_dm.py` script creates the expected structure by symlinking images and generating `.npy` annotation files into `train/` and `val/` subdirectories.
 
-**STEERER data format:** STEERER requires images served via symlinks and per-image JSON files containing head point coordinates. These were generated by `gen_steerer_data.py`, which also writes the `train.txt` / `test.txt` split manifests and a Python config file for each dataset. Two symlinks are needed: `ProcessedData → data/steerer` (referenced by all STEERER configs) and `PretrainedModels → /ssd1/team_cam_ai/ntthai/PretrainedModels` (for the HRNet backbone weights).
-
 ### Uniform Validation Logging
 
-All 10 models output validation metrics in a consistent format:
+All 7 models output validation metrics in a consistent format:
 ```
 VAL epoch=XXX mae=XX.XX mse=XX.XX best_mae=XX.XX
 ```
@@ -530,5 +402,3 @@ A patience-50 early stopping rule was added uniformly across all models. Trainin
 ### Infrastructure
 
 All training jobs are launched with `nohup ... &` to allow logging out. `conda run` was discovered to buffer stdout aggressively, making log files appear empty until the process ends. The fix is to activate the environment in the shell before launching, or to call the Python binary by its absolute path (`/home/team_cam_ai/miniconda3/envs/ntt_det/bin/python`) directly without `conda run`.
-
-CLTR, TransCrowd, and STEERER all assume they are run from their own subdirectory (relative imports / relative data paths). Training commands use `bash -c "cd <dir> && python ..."` wrapped in `nohup` to satisfy this requirement while still redirecting output to the top-level `logs/` directory.

@@ -1,6 +1,6 @@
 # Crowd Counting — A Comparative Study
 
-> Bachelor-level course project comparing ten crowd counting models spanning three methodological families: **density map estimation**, **point-based detection**, and **global regression**.
+> Comparing seven crowd counting models spanning three methodological families: **density map estimation**, **point-based detection**, and **global regression**.
 
 ---
 
@@ -8,11 +8,11 @@
 
 Crowd counting — estimating the number of people in an image — is a core task in intelligent video surveillance, event management, and public safety. This project benchmarks a representative set of models from three paradigms:
 
-- **Density map estimation** (MCNN, CSRNet, BL, DM-Count, STEERER): predict a per-pixel density map whose integral equals the crowd count. Ground-truth maps are generated from head annotations via adaptive Gaussian kernels.
-- **Point-based detection** (P2PNet, CLTR): directly regress head coordinates, then derive the count by aggregation.
-- **Global regression** (TransCrowd, VGG16+FC, ResNet50+FC): map the whole image directly to a scalar count without spatial supervision.
+- **Density map estimation** (MCNN, CSRNet, BL, DM-Count): predict a per-pixel density map whose integral equals the crowd count. Ground-truth maps are generated from head annotations via adaptive Gaussian kernels.
+- **Point-based detection** (P2PNet): directly regress head coordinates, then derive the count by aggregation.
+- **Global regression** (VGG16+FC, ResNet50+FC): map the whole image directly to a scalar count without spatial supervision.
 
-All ten models are evaluated on the two ShanghaiTech benchmarks: **Part A** (dense urban crowds, 33–3,139 people) and **Part B** (sparse suburban crowds, 9–578 people). The two datasets are complementary in difficulty and are the standard shared benchmark across virtually all crowd counting publications, enabling direct comparison to reported baselines.
+All seven models are evaluated on the two ShanghaiTech benchmarks: **Part A** (dense urban crowds, 33–3,139 people) and **Part B** (sparse suburban crowds, 9–578 people). The two datasets are complementary in difficulty and are the standard shared benchmark across virtually all crowd counting publications, enabling direct comparison to reported baselines.
 
 ---
 
@@ -25,11 +25,8 @@ All ten models are evaluated on the two ShanghaiTech benchmarks: **Part A** (den
 | 3 | BL (Bayesian Loss) | Density map | ICCV 2019 | VGG19 |
 | 4 | DM-Count | Density map | NeurIPS 2020 | VGG19 |
 | 5 | P2PNet | Point detection | ICCV 2021 | VGG16 |
-| 6 | CLTR | Point detection | ECCV 2022 | ResNet-50 + Transformer |
-| 7 | STEERER | Density map | ICCV 2023 | ConvNeXt (multi-scale) |
-| 8 | TransCrowd | Regression | IJCAI 2022 | DeiT-Base ViT |
-| 9 | VGG16+FC *(ours)* | Regression | — | VGG16 |
-| 10 | ResNet50+FC *(ours)* | Regression | — | ResNet-50 |
+| 6 | VGG16+FC | Regression | — | VGG16 |
+| 7 | ResNet50+FC | Regression | — | ResNet-50 |
 
 ---
 
@@ -59,30 +56,24 @@ Excluded datasets:
 
 ```
 crowd_counting/
-├── data/                    # All raw datasets (not in repo)
-│   ├── ShanghaiTech/
-│   ├── UCF-QNRF/
-│   ├── UCF-CC-50/
-│   ├── Unidata/
-│   ├── mall_dataset/
-│   └── jhu_crowd/
+├── data/                    # Raw datasets (not in repo)
+│   └── ShanghaiTech/
+│       ├── part_A/
+│       └── part_B/
 ├── preprocess/              # Shared preprocessing scripts
-│   ├── convert_unidata.py       # JSON → numpy point arrays
 │   ├── gen_density_maps.py      # Adaptive Gaussian density maps (.npy)
 │   ├── gen_h5_density.py        # CSRNet-format .h5 density maps
 │   ├── gen_point_npy.py         # BL / DM-Count point npy files
-│   ├── gen_cltr_h5.py           # CLTR-format .h5 files
-│   └── create_unified_split.py  # Merge datasets → train/val/test npy lists
+│   ├── gen_csrnet_json.py       # CSRNet JSON file lists
+│   ├── gen_p2pnet_data.py       # P2PNet .list annotation files
+│   └── reorganise_bl_dm.py      # train/ + val/ layout for BL/DM-Count
 ├── MCNN/
 ├── CSRNet/
 ├── Bayesian-Loss/
 ├── DM-Count/
 ├── P2PNet/
-├── CLTR/
-├── STEERER/
-└── TransCrowd/              # Also hosts VGG16+FC and ResNet50+FC
-    └── Networks/
-        └── models.py        # ViT + VGG16CountNet + ResNet50CountNet
+├── train_regressor.py           # Standalone VGG16+FC / ResNet50+FC trainer
+└── logs/                        # Checkpoints and training logs
 ```
 
 ---
@@ -95,11 +86,7 @@ conda activate crowd
 
 # Core dependencies
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
-pip install scipy h5py timm opencv-python-headless Pillow tqdm
-
-# Per-model extras (install as needed)
-pip install mmcv-full         # STEERER
-pip install nni               # TransCrowd (NNI for hyperparameter search)
+pip install scipy h5py opencv-python-headless Pillow tqdm
 ```
 
 ---
@@ -108,7 +95,7 @@ pip install nni               # TransCrowd (NNI for hyperparameter search)
 
 See [EXPERIMENTS.md](EXPERIMENTS.md) for all preprocessing commands, implementation details, and progress tracking.
 
-Each model is trained and evaluated twice — once on SHA and once on SHB — using the standard train/test splits from the original dataset releases. All ten models share the same training protocol: Adam optimizer, early stopping with patience=50, best checkpoint retained.
+Each model is trained and evaluated twice — once on SHA and once on SHB — using the standard train/test splits from the original dataset releases. All seven models share the same training protocol: early stopping with patience=50, best checkpoint retained.
 
 ---
 
@@ -118,31 +105,25 @@ Each model is trained and evaluated twice — once on SHA and once on SHB — us
 
 | Model | Family | MAE ↓ | MSE ↓ | Published MAE |
 |---|---|---|---|---|
-| MCNN | Density map | | | 110.2 |
-| CSRNet | Density map | | | 68.2 |
-| BL | Density map | | | 62.8 |
-| DM-Count | Density map | | | 59.7 |
-| STEERER | Density map | | | 56.0 |
-| P2PNet | Point detection | | | 52.7 |
-| CLTR | Point detection | | | 56.9 |
-| TransCrowd | Regression | | | 66.1 |
-| VGG16+FC | Regression | | | — |
-| ResNet50+FC | Regression | | | — |
+| MCNN | Density map | 131.47 | 202.50 | 110.2 |
+| CSRNet | Density map | 70.15 | 109.17 | 68.2 |
+| BL | Density map | 66.34 | 100.65 | 62.8 |
+| DM-Count | Density map | 65.88 | 104.70 | 59.7 |
+| P2PNet | Point detection | 58.09 | 95.27 | 52.7 |
+| VGG16+FC | Regression | 🔄 | 🔄 | — |
+| ResNet50+FC | Regression | 🔄 | 🔄 | — |
 
 ### ShanghaiTech Part B (MAE / MSE)
 
 | Model | Family | MAE ↓ | MSE ↓ | Published MAE |
 |---|---|---|---|---|
-| MCNN | Density map | | | 26.4 |
-| CSRNet | Density map | | | 10.6 |
-| BL | Density map | | | 7.7 |
-| DM-Count | Density map | | | 7.4 |
-| STEERER | Density map | | | 6.5 |
-| P2PNet | Point detection | | | 6.7 |
-| CLTR | Point detection | | | 6.5 |
-| TransCrowd | Regression | | | 8.1 |
-| VGG16+FC | Regression | | | — |
-| ResNet50+FC | Regression | | | — |
+| MCNN | Density map | 30.79 | 46.92 | 26.4 |
+| CSRNet | Density map | 10.46 | 16.90 | 10.6 |
+| BL | Density map | 8.10 | 13.45 | 7.7 |
+| DM-Count | Density map | 8.85 | 13.64 | 7.4 |
+| P2PNet | Point detection | 9.26 | 16.53 | 6.7 |
+| VGG16+FC | Regression | 🔄 | 🔄 | — |
+| ResNet50+FC | Regression | 🔄 | 🔄 | — |
 
 ---
 
@@ -162,6 +143,3 @@ This project builds on publicly available implementations:
 - [Bayesian Loss](https://github.com/ZhihengCV/Bayesian-Crowd-Counting)
 - [DM-Count](https://github.com/cvlab-stonybrook/DM-Count)
 - [P2PNet](https://github.com/TencentYoutuResearch/CrowdCounting-P2PNet)
-- [CLTR](https://github.com/dk-liang/CLTR)
-- [STEERER](https://github.com/taohan10200/STEERER)
-- [TransCrowd](https://github.com/dk-liang/TransCrowd)
