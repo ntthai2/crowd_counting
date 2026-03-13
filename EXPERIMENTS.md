@@ -9,7 +9,7 @@
 
 ## Strategy
 
-Train **7 crowd-counting models** on **ShanghaiTech A (SHA)** and **ShanghaiTech B (SHB)** separately, producing two result tables for direct comparison against published baselines.
+Train **8 crowd-counting models** on **ShanghaiTech A (SHA)** and **ShanghaiTech B (SHB)** separately, producing two result tables for direct comparison against published baselines.
 
 **Models dropped:** CLTR, STEERER, TransCrowd (transformer-based; unstable training, modest results).
 
@@ -31,6 +31,7 @@ Train **7 crowd-counting models** on **ShanghaiTech A (SHA)** and **ShanghaiTech
 | 5 | P2PNet | Point detection | `P2PNet/` | `P2PNet/train.py` |
 | 6 | VGG16+FC | Regression (CNN) | root | `train_regressor.py --model-type vgg16` |
 | 7 | ResNet50+FC | Regression (CNN) | root | `train_regressor.py --model-type resnet50` |
+| 8 | APGCC | Point detection | `APGCC/apgcc/` | `APGCC/apgcc/main.py` |
 
 ---
 
@@ -53,6 +54,9 @@ Train **7 crowd-counting models** on **ShanghaiTech A (SHA)** and **ShanghaiTech
 
 5. **Early stopping** is enabled with patience=50 in all models.
 
+6. **APGCC list-file compatibility was patched.**
+  APGCC now auto-detects `shanghai_tech_part_a_{train,test}.list` / `shanghai_tech_part_b_{train,test}.list` when `train.list` / `test.list` do not exist. This allows direct training on the same SHA/SHB preprocessing already used by P2PNet.
+
 ---
 
 ## Checkpoint File Locations
@@ -66,6 +70,7 @@ Train **7 crowd-counting models** on **ShanghaiTech A (SHA)** and **ShanghaiTech
 | P2PNet | `logs/p2pnet_<ds>_ckpts/best_mae.pth` |
 | VGG16+FC | `logs/vgg16_<ds>_ckpts/model_best.pth` |
 | ResNet50+FC | `logs/resnet50_<ds>_ckpts/model_best.pth` |
+| APGCC | `logs/apgcc_<ds>_ckpts/best.pth` |
 
 ---
 
@@ -80,6 +85,7 @@ Train **7 crowd-counting models** on **ShanghaiTech A (SHA)** and **ShanghaiTech
 | P2PNet | 1e-4 (backbone 1e-5) | 8 | 3500 | AdamW | lr_drop=3500 |
 | VGG16+FC | 1e-4 | 8 | 1000 | Adam | ImageNet pretrained; input 448×448; MSE loss |
 | ResNet50+FC | 1e-4 | 8 | 1000 | Adam | ImageNet pretrained; input 448×448; MSE loss |
+| APGCC | 1e-4 (backbone 1e-5) | 8 | 3500 | Adam | IFI decoder + APG |
 
 ---
 
@@ -140,17 +146,27 @@ nohup $PYTHON -u $BASE/P2PNet/train.py \
 
 # ─── 6. VGG16+FC SHA ─────────────────────────────────────────────────────────
 nohup $PYTHON -u $BASE/train_regressor.py \
-  --dataset ShanghaiB --data-dir $BASE/data/ShanghaiTech/part_A \
-  --save-dir $BASE/logs/vgg16_shb_ckpts --model-type vgg16 \
+  --dataset ShanghaiA --data-dir $BASE/data/ShanghaiTech/part_A \
+  --save-dir $BASE/logs/vgg16_sha_ckpts --model-type vgg16 \
   --epochs 1000 --lr 1e-4 --batch-size 8 --gpu 0 \
-  > $BASE/logs/vgg16_shb.log 2>&1 &
+  > $BASE/logs/vgg16_sha.log 2>&1 &
 
 # ─── 7. ResNet50+FC SHA ─────────────────────────────────────────────────────
 nohup $PYTHON -u $BASE/train_regressor.py \
-  --dataset ShanghaiB --data-dir $BASE/data/ShanghaiTech/part_A \
-  --save-dir $BASE/logs/resnet50_shb_ckpts --model-type resnet50 \
+  --dataset ShanghaiA --data-dir $BASE/data/ShanghaiTech/part_A \
+  --save-dir $BASE/logs/resnet50_sha_ckpts --model-type resnet50 \
   --epochs 1000 --lr 1e-4 --batch-size 8 --gpu 0 \
-  > $BASE/logs/resnet50_shb.log 2>&1 &
+  > $BASE/logs/resnet50_sha.log 2>&1 &
+
+# ─── 8. APGCC SHA ────────────────────────────────────────────────────────────
+mkdir -p $BASE/logs/apgcc_sha_ckpts
+nohup $PYTHON -u $BASE/APGCC/apgcc/main.py \
+  -c $BASE/APGCC/apgcc/configs/SHHA_IFI.yml \
+  DATASETS.DATA_ROOT $BASE/data/ShanghaiTech/part_A \
+  DATASETS.DATASET SHHA \
+  OUTPUT_DIR $BASE/logs/apgcc_sha_ckpts \
+  GPU_ID 0 \
+  > $BASE/logs/apgcc_sha.log 2>&1 &
 ```
 
 ---
@@ -219,6 +235,16 @@ nohup $PYTHON -u $BASE/train_regressor.py \
   --save-dir $BASE/logs/resnet50_shb_ckpts --model-type resnet50 \
   --epochs 1000 --lr 1e-4 --batch-size 8 --gpu 0 \
   > $BASE/logs/resnet50_shb.log 2>&1 &
+
+# ─── 8. APGCC SHB ────────────────────────────────────────────────────────────
+mkdir -p $BASE/logs/apgcc_shb_ckpts
+nohup $PYTHON -u $BASE/APGCC/apgcc/main.py \
+  -c $BASE/APGCC/apgcc/configs/SHHB_IFI.yml \
+  DATASETS.DATA_ROOT $BASE/data/ShanghaiTech/part_B \
+  DATASETS.DATASET SHHB \
+  OUTPUT_DIR $BASE/logs/apgcc_shb_ckpts \
+  GPU_ID 0 \
+  > $BASE/logs/apgcc_shb.log 2>&1 &
 ```
 
 ---
@@ -236,6 +262,7 @@ These extend the training commands with a checkpoint flag. Append to whichever d
 | P2PNet | `--resume <ckpt>` | `logs/p2pnet_<ds>_ckpts/best_mae.pth` |
 | VGG16+FC | `--resume <ckpt>` | `logs/vgg16_<ds>_ckpts/checkpoint.pth` |
 | ResNet50+FC | `--resume <ckpt>` | `logs/resnet50_<ds>_ckpts/checkpoint.pth` |
+| APGCC | `RESUME True RESUME_PATH <ckpt>` | `logs/apgcc_<ds>_ckpts/best.pth` |
 
 **Example — resume P2PNet SHA:**
 ```bash
@@ -288,8 +315,8 @@ Lower is better for both MAE and MSE.
 | BL | 66.34 | 100.65 | 62.8 |
 | DM-Count | 65.88 | 104.70 | 59.7 |
 | P2PNet | 58.09 | 95.27 | 52.7 |
-| VGG16+FC | 🔄 | 🔄 | — |
-| ResNet50+FC | 🔄 | 🔄 | — |
+| VGG16+FC | 113.51 | 168.23 | — |
+| ResNet50+FC | 135.47 | 200.70 | — |
 
 ### ShanghaiTech B
 
@@ -300,8 +327,8 @@ Lower is better for both MAE and MSE.
 | BL | 8.10 | 13.45 | 7.7 |
 | DM-Count | 8.85 | 13.64 | 7.4 |
 | P2PNet | 9.26 | 16.53 | 6.7 |
-| VGG16+FC | 🔄 | 🔄 | — |
-| ResNet50+FC | 🔄 | 🔄 | — |
+| VGG16+FC | 16.03 | 24.95 | — |
+| ResNet50+FC | 22.46 | 40.57 | — |
 
 ---
 
@@ -325,6 +352,7 @@ Lower is better for both MAE and MSE.
 | DM-Count | `data/ShanghaiTech/part_A/train/` + `val/` | `part_B/` same |
 | P2PNet | `P2PNet/crowd_datasets/SHHA/SHHA.list` | `SHHB/SHHB.list` |
 | VGG16+FC / ResNet50+FC | `data/ShanghaiTech/part_A/` (raw) | `data/ShanghaiTech/part_B/` (raw) |
+| APGCC | `data/ShanghaiTech/part_A/shanghai_tech_part_a_train.list` | `data/ShanghaiTech/part_B/shanghai_tech_part_b_train.list` |
 
 ### Preprocessing Scripts (`preprocess/`)
 

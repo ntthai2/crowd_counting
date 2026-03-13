@@ -1,4 +1,4 @@
-# Crowd Counting — A Comparative Study
+# Crowd Counting
 
 > Comparing seven crowd counting models spanning three methodological families: **density map estimation**, **point-based detection**, and **global regression**.
 
@@ -110,8 +110,8 @@ Each model is trained and evaluated twice — once on SHA and once on SHB — us
 | BL | Density map | 66.34 | 100.65 | 62.8 |
 | DM-Count | Density map | 65.88 | 104.70 | 59.7 |
 | P2PNet | Point detection | 58.09 | 95.27 | 52.7 |
-| VGG16+FC | Regression | 🔄 | 🔄 | — |
-| ResNet50+FC | Regression | 🔄 | 🔄 | — |
+| VGG16+FC | Regression | 113.51 | 168.23 | — |
+| ResNet50+FC | Regression | 135.47 | 200.70 | — |
 
 ### ShanghaiTech Part B (MAE / MSE)
 
@@ -122,8 +122,8 @@ Each model is trained and evaluated twice — once on SHA and once on SHB — us
 | BL | Density map | 8.10 | 13.45 | 7.7 |
 | DM-Count | Density map | 8.85 | 13.64 | 7.4 |
 | P2PNet | Point detection | 9.26 | 16.53 | 6.7 |
-| VGG16+FC | Regression | 🔄 | 🔄 | — |
-| ResNet50+FC | Regression | 🔄 | 🔄 | — |
+| VGG16+FC | Regression | 16.03 | 24.95 | — |
+| ResNet50+FC | Regression | 22.46 | 40.57 | — |
 
 ---
 
