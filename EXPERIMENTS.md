@@ -9,7 +9,7 @@
 
 ## Strategy
 
-Train **8 crowd-counting models** on **ShanghaiTech A (SHA)** and **ShanghaiTech B (SHB)** separately, producing two result tables for direct comparison against published baselines.
+Train **8 crowd-counting models** on **ShanghaiTech A (SHA)** and **ShanghaiTech B (SHB)** separately, then evaluate a **YOLO11m head-detector counting baseline** on the same test sets.
 
 **Models dropped:** CLTR, STEERER, TransCrowd (transformer-based; unstable training, modest results).
 
@@ -32,6 +32,7 @@ Train **8 crowd-counting models** on **ShanghaiTech A (SHA)** and **ShanghaiTech
 | 6 | VGG16+FC | Regression (CNN) | root | `train_regressor.py --model-type vgg16` |
 | 7 | ResNet50+FC | Regression (CNN) | root | `train_regressor.py --model-type resnet50` |
 | 8 | APGCC | Point detection | `APGCC/apgcc/` | `APGCC/apgcc/main.py` |
+| 9 | YOLO11m-head | Detection counting | root | `train_yolo.py` + `eval_yolo.py` |
 
 ---
 
@@ -46,13 +47,13 @@ Train **8 crowd-counting models** on **ShanghaiTech A (SHA)** and **ShanghaiTech
 3. **P2PNet requires pre-creating the output directory before running.**
    The script opens a log file inside `--output_dir` without creating it first. Always run `mkdir -p logs/p2pnet_sha_ckpts` before the training command.
 
-4. **VAL log format is uniform across all models:**
+4. **VAL log format is uniform across all trainable crowd-counting models:**
    ```
    VAL epoch=XXX mae=XX.XX mse=XX.XX best_mae=XX.XX
    ```
    Monitor progress with: `grep "^VAL" logs/<model>.log | tail -5`
 
-5. **Early stopping** is enabled with patience=50 in all models.
+5. **Early stopping** is enabled with patience=50 in all crowd-counting training runs.
 
 6. **APGCC list-file compatibility was patched.**
   APGCC now auto-detects `shanghai_tech_part_a_{train,test}.list` / `shanghai_tech_part_b_{train,test}.list` when `train.list` / `test.list` do not exist. This allows direct training on the same SHA/SHB preprocessing already used by P2PNet.
@@ -302,6 +303,49 @@ tail -f $BASE/logs/mcnn_sha.log
 
 ---
 
+## YOLO Detection-Count Evaluation
+
+YOLO11m is trained on merged head-detection datasets (`runs/head_detection/train/weights/best.pt`) and evaluated on SHA/SHB by counting predicted boxes per image.
+
+### Main evaluation command (current best settings)
+
+```bash
+PYTHON=/home/team_cam_ai/miniconda3/envs/ntt_det/bin/python
+BASE=/ssd1/team_cam_ai/ntthai/crowd_counting
+
+$PYTHON -u $BASE/eval_yolo.py \
+  --weights $BASE/runs/head_detection/train/weights/best.pt \
+  --dataset both --device 0 \
+  --conf 0.25 --imgsz 1280
+```
+
+### Save per-image CSVs for analysis/visualization
+
+```bash
+$PYTHON -u $BASE/eval_yolo.py \
+  --weights $BASE/runs/head_detection/train/weights/best.pt \
+  --dataset both --device 0 \
+  --conf 0.25 --imgsz 1280 \
+  --save-csv-dir $BASE/runs/head_detection/eval_csv
+```
+
+### Best/Worst prediction visualization
+
+```bash
+$PYTHON -u $BASE/visualize_pred.py \
+  --weights $BASE/runs/head_detection/train/weights/best.pt \
+  --csv-sha $BASE/runs/head_detection/eval_csv/yolo_sha.csv \
+  --csv-shb $BASE/runs/head_detection/eval_csv/yolo_shb.csv \
+  --sha-root $BASE/data/ShanghaiTech/part_A \
+  --shb-root $BASE/data/ShanghaiTech/part_B \
+  --out-dir $BASE/runs/head_detection/vis \
+  --num 1 --conf 0.25 --imgsz 1280 --device 0
+```
+
+Visualization outputs are saved under `runs/head_detection/vis/`.
+
+---
+
 ## Results
 
 Lower is better for both MAE and MSE.
@@ -315,6 +359,7 @@ Lower is better for both MAE and MSE.
 | BL | 66.34 | 100.65 | 62.8 |
 | DM-Count | 65.88 | 104.70 | 59.7 |
 | P2PNet | 58.09 | 95.27 | 52.7 |
+| APGCC | 61.91 | 94.95 | 49.9 |
 | VGG16+FC | 113.51 | 168.23 | — |
 | ResNet50+FC | 135.47 | 200.70 | — |
 | YOLO11m-head | 236.30 | 392.29 | — |
@@ -328,6 +373,7 @@ Lower is better for both MAE and MSE.
 | BL | 8.10 | 13.45 | 7.7 |
 | DM-Count | 8.85 | 13.64 | 7.4 |
 | P2PNet | 9.26 | 16.53 | 6.7 |
+| APGCC | 10.26 | 16.92 | 6.0 |
 | VGG16+FC | 16.03 | 24.95 | — |
 | ResNet50+FC | 22.46 | 40.57 | — |
 | YOLO11m-head | 40.20 | 72.93 | — |
@@ -355,6 +401,7 @@ Lower is better for both MAE and MSE.
 | P2PNet | `P2PNet/crowd_datasets/SHHA/SHHA.list` | `SHHB/SHHB.list` |
 | VGG16+FC / ResNet50+FC | `data/ShanghaiTech/part_A/` (raw) | `data/ShanghaiTech/part_B/` (raw) |
 | APGCC | `data/ShanghaiTech/part_A/shanghai_tech_part_a_train.list` | `data/ShanghaiTech/part_B/shanghai_tech_part_b_train.list` |
+| YOLO11m-head eval | `eval_yolo.py --sha-root data/ShanghaiTech/part_A` | `eval_yolo.py --shb-root data/ShanghaiTech/part_B` |
 
 ### Preprocessing Scripts (`preprocess/`)
 
@@ -377,11 +424,12 @@ These have all been run already. Only re-run if data is lost.
 
 ### Background and Motivation
 
-The project aims to benchmark crowd-counting methods spanning three architectural families: **density-map regression**, **point detection**, and **global count regression**. Seven models were ultimately evaluated:
+The project aims to benchmark crowd-counting methods spanning three architectural families: **density-map regression**, **point detection**, and **global count regression**. Eight crowd-counting models were fully trained and evaluated, plus one additional YOLO detection-count baseline:
 
 - *Density-map* (MCNN, CSRNet, BL, DM-Count) — the mainstream approach; the network predicts a spatial density map whose integral gives the count.
-- *Point detection* (P2PNet) — newer paradigm that predicts a discrete set of head locations instead of a smooth map.
+- *Point detection* (P2PNet, APGCC) — predicts a discrete set of head locations/proposals instead of a smooth map.
 - *Count regression* (VGG16+FC, ResNet50+FC) — global regression directly from image features; simpler baseline but lower accuracy.
+- *Detection counting* (YOLO11m-head) — detects heads with an object detector and uses the number of boxes as count.
 
 Three additional transformer-based models (CLTR, STEERER, TransCrowd) were attempted but dropped: training was unstable and after hundreds of epochs results could not approach the density-map baselines, making the additional complexity unjustifiable within the project scope.
 
@@ -419,7 +467,7 @@ Several bugs in the original model repositories had to be patched:
 
 ### Uniform Validation Logging
 
-All 7 models output validation metrics in a consistent format:
+All trainable crowd-counting models output validation metrics in a consistent format:
 ```
 VAL epoch=XXX mae=XX.XX mse=XX.XX best_mae=XX.XX
 ```

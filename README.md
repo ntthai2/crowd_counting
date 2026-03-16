@@ -1,18 +1,19 @@
 # Crowd Counting
 
-> Comparing seven crowd counting models spanning three methodological families: **density map estimation**, **point-based detection**, and **global regression**.
+> Comparing nine models spanning four methodological families: **density map estimation**, **point-based counting**, **global regression**, and **object detection counting**.
 
 ---
 
 ## Abstract
 
-Crowd counting — estimating the number of people in an image — is a core task in intelligent video surveillance, event management, and public safety. This project benchmarks a representative set of models from three paradigms:
+Crowd counting — estimating the number of people in an image — is a core task in intelligent video surveillance, event management, and public safety. This project benchmarks a representative set of models from four paradigms:
 
 - **Density map estimation** (MCNN, CSRNet, BL, DM-Count): predict a per-pixel density map whose integral equals the crowd count. Ground-truth maps are generated from head annotations via adaptive Gaussian kernels.
-- **Point-based detection** (P2PNet): directly regress head coordinates, then derive the count by aggregation.
+- **Point-based counting** (P2PNet, APGCC): directly regress head coordinates/proposals and derive count by aggregation.
 - **Global regression** (VGG16+FC, ResNet50+FC): map the whole image directly to a scalar count without spatial supervision.
+- **Object detection counting** (YOLO11m-head): run head detection and use the number of boxes as the predicted count.
 
-All seven models are evaluated on the two ShanghaiTech benchmarks: **Part A** (dense urban crowds, 33–3,139 people) and **Part B** (sparse suburban crowds, 9–578 people). The two datasets are complementary in difficulty and are the standard shared benchmark across virtually all crowd counting publications, enabling direct comparison to reported baselines.
+All models are evaluated on the two ShanghaiTech benchmarks: **Part A** (dense urban crowds, 33–3,139 people) and **Part B** (sparse suburban crowds, 9–578 people). The two datasets are complementary in difficulty and are the standard shared benchmark across virtually all crowd counting publications, enabling direct comparison to reported baselines.
 
 ---
 
@@ -25,8 +26,10 @@ All seven models are evaluated on the two ShanghaiTech benchmarks: **Part A** (d
 | 3 | BL (Bayesian Loss) | Density map | ICCV 2019 | VGG19 |
 | 4 | DM-Count | Density map | NeurIPS 2020 | VGG19 |
 | 5 | P2PNet | Point detection | ICCV 2021 | VGG16 |
-| 6 | VGG16+FC | Regression | — | VGG16 |
-| 7 | ResNet50+FC | Regression | — | ResNet-50 |
+| 6 | APGCC | Point detection | ECCV 2024 | VGG16-BN + IFI |
+| 7 | VGG16+FC | Regression | — | VGG16 |
+| 8 | ResNet50+FC | Regression | — | ResNet-50 |
+| 9 | YOLO11m-head | Detection counting | — | YOLO11m |
 
 ---
 
@@ -40,7 +43,6 @@ All seven models are evaluated on the two ShanghaiTech benchmarks: **Part A** (d
 | UCF-CC-50 | 50 (5-fold CV) | 94–4,543 | Point (`_ann.mat`) | ❌ Excluded |
 | Unidata | 20 | varies | JSON keypoint | ❌ Excluded |
 | mall | 2,000 | 13–53 | Point-per-frame (`.mat`) | ❌ Excluded |
-| JHU-Crowd++ | 4,372 (2272+500+1600) | 0–25,791 | Head-center + size (`.txt`) | ❌ Excluded |
 
 SHA and SHB are trained and evaluated independently using their standard splits, matching the protocol used in the original publications. This allows direct comparison to reported baselines.
 
@@ -72,21 +74,12 @@ crowd_counting/
 ├── Bayesian-Loss/
 ├── DM-Count/
 ├── P2PNet/
+├── APGCC/
 ├── train_regressor.py           # Standalone VGG16+FC / ResNet50+FC trainer
+├── train_yolo.py                # YOLO11m head-detector training
+├── eval_yolo.py                 # YOLO count evaluation on SHA/SHB
+├── visualize_pred.py            # Best/worst prediction visualization
 └── logs/                        # Checkpoints and training logs
-```
-
----
-
-## Setup
-
-```bash
-conda create -n crowd python=3.9 -y
-conda activate crowd
-
-# Core dependencies
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
-pip install scipy h5py opencv-python-headless Pillow tqdm
 ```
 
 ---
@@ -95,7 +88,7 @@ pip install scipy h5py opencv-python-headless Pillow tqdm
 
 See [EXPERIMENTS.md](EXPERIMENTS.md) for all preprocessing commands, implementation details, and progress tracking.
 
-Each model is trained and evaluated twice — once on SHA and once on SHB — using the standard train/test splits from the original dataset releases. All seven models share the same training protocol: early stopping with patience=50, best checkpoint retained.
+Core crowd-counting models are trained and evaluated twice — once on SHA and once on SHB — using the standard train/test splits from the original dataset releases. YOLO11m-head is trained on merged head-detection data, then evaluated on SHA/SHB by counting detections.
 
 ---
 
@@ -110,6 +103,7 @@ Each model is trained and evaluated twice — once on SHA and once on SHB — us
 | BL | Density map | 66.34 | 100.65 | 62.8 |
 | DM-Count | Density map | 65.88 | 104.70 | 59.7 |
 | P2PNet | Point detection | 58.09 | 95.27 | 52.7 |
+| APGCC | Point detection | 61.91 | 94.95 | 49.9 |
 | VGG16+FC | Regression | 113.51 | 168.23 | — |
 | ResNet50+FC | Regression | 135.47 | 200.70 | — |
 | YOLO11m-head | Detection | 236.30 | 392.29 | — |
@@ -123,6 +117,7 @@ Each model is trained and evaluated twice — once on SHA and once on SHB — us
 | BL | Density map | 8.10 | 13.45 | 7.7 |
 | DM-Count | Density map | 8.85 | 13.64 | 7.4 |
 | P2PNet | Point detection | 9.26 | 16.53 | 6.7 |
+| APGCC | Point detection | 10.26 | 16.92 | 6.0 |
 | VGG16+FC | Regression | 16.03 | 24.95 | — |
 | ResNet50+FC | Regression | 22.46 | 40.57 | — |
 | YOLO11m-head | Detection | 40.20 | 72.93 | — |
@@ -145,3 +140,5 @@ This project builds on publicly available implementations:
 - [Bayesian Loss](https://github.com/ZhihengCV/Bayesian-Crowd-Counting)
 - [DM-Count](https://github.com/cvlab-stonybrook/DM-Count)
 - [P2PNet](https://github.com/TencentYoutuResearch/CrowdCounting-P2PNet)
+- [APGCC](https://github.com/AaronCIH/APGCC)
+- [Ultralytics YOLO](https://github.com/ultralytics/ultralytics)
