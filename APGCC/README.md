@@ -19,7 +19,7 @@ We propose Auxiliary Point Guidance (APG) to provide clear and effective guidanc
 1) Create a conda environment and activate it.
 ```
 conda create --name apgcc python=3.8 -y
-conda activatre apgcc
+conda activate apgcc
 ```
 2) Clone and enter into repo directory.
 ```
