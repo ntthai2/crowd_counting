@@ -317,6 +317,7 @@ Lower is better for both MAE and MSE.
 | P2PNet | 58.09 | 95.27 | 52.7 |
 | VGG16+FC | 113.51 | 168.23 | — |
 | ResNet50+FC | 135.47 | 200.70 | — |
+| YOLO11m-head | 236.30 | 392.29 | — |
 
 ### ShanghaiTech B
 
@@ -329,6 +330,7 @@ Lower is better for both MAE and MSE.
 | P2PNet | 9.26 | 16.53 | 6.7 |
 | VGG16+FC | 16.03 | 24.95 | — |
 | ResNet50+FC | 22.46 | 40.57 | — |
+| YOLO11m-head | 40.20 | 72.93 | — |
 
 ---
 

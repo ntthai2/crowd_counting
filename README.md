@@ -112,6 +112,7 @@ Each model is trained and evaluated twice — once on SHA and once on SHB — us
 | P2PNet | Point detection | 58.09 | 95.27 | 52.7 |
 | VGG16+FC | Regression | 113.51 | 168.23 | — |
 | ResNet50+FC | Regression | 135.47 | 200.70 | — |
+| YOLO11m-head | Detection | 236.30 | 392.29 | — |
 
 ### ShanghaiTech Part B (MAE / MSE)
 
@@ -124,6 +125,7 @@ Each model is trained and evaluated twice — once on SHA and once on SHB — us
 | P2PNet | Point detection | 9.26 | 16.53 | 6.7 |
 | VGG16+FC | Regression | 16.03 | 24.95 | — |
 | ResNet50+FC | Regression | 22.46 | 40.57 | — |
+| YOLO11m-head | Detection | 40.20 | 72.93 | — |
 
 ---
 
