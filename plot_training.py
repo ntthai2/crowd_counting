@@ -23,6 +23,10 @@ import matplotlib.pyplot as plt
 
 # Map log file stem -> display name
 LOG_FILES = {
+    'vgg16_sha':         'VGG16+FC (SHA)',
+    'vgg16_shb':         'VGG16+FC (SHB)',
+    'resnet50_sha':      'ResNet50+FC (SHA)',
+    'resnet50_shb':      'ResNet50+FC (SHB)',
     'mcnn_sha':          'MCNN (SHA)',
     'mcnn_shb':          'MCNN (SHB)',
     'csrnet_sha':        'CSRNet (SHA)',
@@ -33,10 +37,8 @@ LOG_FILES = {
     'dmcount_shb':       'DM-Count (SHB)',
     'p2pnet_sha':        'P2PNet (SHA)',
     'p2pnet_shb':        'P2PNet (SHB)',
-    'vgg16_sha':         'VGG16+FC (SHA)',
-    'vgg16_shb':         'VGG16+FC (SHB)',
-    'resnet50_sha':      'ResNet50+FC (SHA)',
-    'resnet50_shb':      'ResNet50+FC (SHB)',
+    'apgcc_sha':        'APGCC (SHA)',
+    'apgcc_shb':        'APGCC (SHB)',
 }
 
 VAL_PATTERN = re.compile(
