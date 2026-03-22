@@ -42,7 +42,13 @@ def _select_multiscale_features(backbone: nn.Module):
 
     by_res = {}
     for item in captures:
-        by_res[(item[3], item[4])] = item
+        key = (item[3], item[4])
+        if key in by_res:
+            # choose the deepest (largest channel) feature for each resolution
+            if item[2] > by_res[key][2]:
+                by_res[key] = item
+        else:
+            by_res[key] = item
 
     feats = list(by_res.values())
     feats.sort(key=lambda t: t[3] * t[4], reverse=True)
