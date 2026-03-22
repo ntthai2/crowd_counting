@@ -6,7 +6,7 @@ from util.misc import (NestedTensor, nested_tensor_from_tensor_list,
                        accuracy, get_world_size, interpolate,
                        is_dist_avail_and_initialized)
 
-from .backbone import build_backbone
+from .backbone import build_backbone, Backbone_VGG
 from .matcher import build_matcher_crowd
 
 import numpy as np
@@ -208,15 +208,22 @@ class P2PNet(nn.Module):
 
         if not hasattr(backbone, 'out_channels') or len(backbone.out_channels) < 4:
             raise ValueError('Backbone must provide out_channels with at least 4 stages')
-        self.fpn = Decoder(backbone.out_channels[0], backbone.out_channels[1], backbone.out_channels[2])
+
+        if isinstance(backbone, Backbone_VGG):
+            self.fpn_feat_indices = [1, 2, 3]
+        else:
+            self.fpn_feat_indices = [0, 1, 2]
+
+        c3, c4, c5 = [backbone.out_channels[i] for i in self.fpn_feat_indices]
+        self.fpn = Decoder(c3, c4, c5)
 
     def forward(self, samples: NestedTensor):
         # get the backbone features
         features = self.backbone(samples)
         # forward the feature pyramid
-        features_fpn = self.fpn([features[0], features[1], features[2]])
+        features_fpn = self.fpn([features[i] for i in self.fpn_feat_indices])
 
-        batch_size = features[0].shape[0]
+        batch_size = features[self.fpn_feat_indices[0]].shape[0]
         # run the regression and classification branch
         regression = self.regression(features_fpn[1]) * 100 # 8x
         classification = self.classification(features_fpn[1])

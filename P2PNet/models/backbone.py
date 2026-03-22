@@ -82,7 +82,7 @@ class BackboneBase_VGG(nn.Module):
                 self.body = nn.Sequential(*features[:30])
         self.num_channels = num_channels
         self.return_interm_layers = return_interm_layers
-        self.out_channels = [128, 256, 512, 512] if name == 'vgg16_bn' else [64, 128, 256, 512]
+        self.out_channels = [128, 256, 512, 512]
 
     def forward(self, tensor_list):
         out = []
