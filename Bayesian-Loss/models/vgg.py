@@ -2,6 +2,7 @@ import torch.nn as nn
 import torch.utils.model_zoo as model_zoo
 import torch
 from torch.nn import functional as F
+from torchvision import models as tv_models
 
 __all__ = ['vgg19']
 model_urls = {
@@ -53,4 +54,57 @@ def vgg19():
     model = VGG(make_layers(cfg['E']))
     model.load_state_dict(model_zoo.load_url(model_urls['vgg19']), strict=False)
     return model
+
+
+class GenericDensityModel(nn.Module):
+    def __init__(self, backbone_name: str):
+        super().__init__()
+        if backbone_name not in tv_models.list_models(module=tv_models):
+            raise ValueError(f"Unsupported torchvision backbone: {backbone_name}")
+        self.backbone = tv_models.get_model(backbone_name, weights="DEFAULT")
+        self.backbone.eval()
+        out_ch = self._infer_last_channels()
+        self.reg_layer = nn.Sequential(
+            nn.Conv2d(out_ch, 256, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(256, 128, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(128, 1, 1)
+        )
+
+    def _infer_last_channels(self) -> int:
+        x = torch.zeros(1, 3, 224, 224)
+        with torch.no_grad():
+            feat = self._extract_last_4d(x)
+        return int(feat.shape[1])
+
+    def _extract_last_4d(self, x: torch.Tensor) -> torch.Tensor:
+        last = None
+        handles = []
+
+        def _hook(_m, _i, o):
+            nonlocal last
+            if isinstance(o, torch.Tensor) and o.dim() == 4 and o.shape[2] >= 2 and o.shape[3] >= 2:
+                last = o
+
+        for _, module in self.backbone.named_modules():
+            handles.append(module.register_forward_hook(_hook))
+        _ = self.backbone(x)
+        for h in handles:
+            h.remove()
+        if last is None:
+            raise ValueError("Could not extract 4D feature map from torchvision backbone")
+        return last
+
+    def forward(self, x):
+        feat = self._extract_last_4d(x)
+        feat = F.upsample_bilinear(feat, scale_factor=2)
+        out = self.reg_layer(feat)
+        return torch.abs(out)
+
+
+def build_model(backbone_name: str = 'vgg19'):
+    if backbone_name == 'vgg19':
+        return vgg19()
+    return GenericDensityModel(backbone_name)
 

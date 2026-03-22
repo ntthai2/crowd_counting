@@ -1,9 +1,7 @@
 /data
 /.vscode
 /__pycache__
-/logs
-/PretrainedModels
-/ProcessedData
+/logs*
 /runs
 *.log
 *.mp4

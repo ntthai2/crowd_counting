@@ -4,9 +4,9 @@ from .models import MCNN
 
 
 class CrowdCounter(nn.Module):
-    def __init__(self):
+    def __init__(self, backbone='mcnn'):
         super(CrowdCounter, self).__init__()        
-        self.DME = MCNN()        
+        self.DME = MCNN(backbone=backbone)        
         self.loss_fn = nn.MSELoss()
         
     @property

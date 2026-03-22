@@ -59,6 +59,8 @@ def main():
                         help='Known best MAE so far (use with --resume)')
     parser.add_argument('--patience',   type=int, default=50,
                         help='Stop if val MAE does not improve for this many epochs (default: 50)')
+    parser.add_argument('--backbone',   type=str, default='mcnn',
+                        help='mcnn (default) or any torchvision classification model name')
     args = parser.parse_args()
 
     torch.cuda.set_device(args.gpu)
@@ -78,7 +80,7 @@ def main():
     torch.manual_seed(rand_seed)
     torch.cuda.manual_seed(rand_seed)
 
-    net = CrowdCounter()
+    net = CrowdCounter(backbone=args.backbone)
     network.weights_normal_init(net, dev=0.01)
     net.cuda()
     net.train()

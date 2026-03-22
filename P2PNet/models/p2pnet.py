@@ -206,7 +206,9 @@ class P2PNet(nn.Module):
 
         self.anchor_points = AnchorPoints(pyramid_levels=[3,], row=row, line=line)
 
-        self.fpn = Decoder(256, 512, 512)
+        if not hasattr(backbone, 'out_channels') or len(backbone.out_channels) < 4:
+            raise ValueError('Backbone must provide out_channels with at least 4 stages')
+        self.fpn = Decoder(backbone.out_channels[1], backbone.out_channels[2], backbone.out_channels[3])
 
     def forward(self, samples: NestedTensor):
         # get the backbone features

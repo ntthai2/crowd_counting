@@ -40,6 +40,8 @@ def parse_args():
     parser.add_argument('--norm-cood', type=int, default=0, help='whether to norm cood when computing distance')
     parser.add_argument('--save-dir', default='../logs/dmcount_sha_ckpts',
                         help='directory to save model checkpoints')
+    parser.add_argument('--backbone', type=str, default='vgg19',
+                        help='vgg19 (default) or any torchvision classification model name')
     parser.add_argument('--patience', type=int, default=50,
                         help='early stopping patience in training epochs')
 

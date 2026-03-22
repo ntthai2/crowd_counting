@@ -2,6 +2,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torchvision import models as tv_models
 
 # VGG backbone
 class Base_VGG(nn.Module):
@@ -91,3 +92,74 @@ class Base_ResNet(nn.Module):
         xs = tensor_list
         out = self.backbone(xs)
         return out
+
+
+class Base_Torchvision(nn.Module):
+    def __init__(self, name: str, **kwargs):
+        super().__init__()
+        if name.startswith('tv:'):
+            name = name[3:]
+        if name not in tv_models.list_models(module=tv_models):
+            raise ValueError(f"Unsupported torchvision encoder: {name}")
+        self.backbone = tv_models.get_model(name, weights="DEFAULT")
+        self.backbone.eval()
+        self.node_names, self._outplanes = self._select_nodes()
+        self._modules_map = dict(self.backbone.named_modules())
+
+    def _select_nodes(self):
+        named_modules = list(self.backbone.named_modules())
+        idx_map = {n: i for i, (n, _) in enumerate(named_modules)}
+        captures = []
+        handles = []
+
+        def mk(name):
+            def _h(_m, _i, o):
+                if isinstance(o, torch.Tensor) and o.dim() == 4 and o.shape[2] >= 2 and o.shape[3] >= 2:
+                    captures.append((idx_map[name], name, int(o.shape[1]), int(o.shape[2]), int(o.shape[3])))
+
+            return _h
+
+        for name, mod in named_modules:
+            if not name:
+                continue
+            handles.append(mod.register_forward_hook(mk(name)))
+
+        with torch.no_grad():
+            _ = self.backbone(torch.zeros(1, 3, 224, 224))
+
+        for h in handles:
+            h.remove()
+
+        by_res = {}
+        for item in captures:
+            by_res[(item[3], item[4])] = item
+        feats = list(by_res.values())
+        feats.sort(key=lambda t: t[3] * t[4], reverse=True)
+        if len(feats) < 4:
+            raise ValueError("Torchvision encoder must expose at least 4 feature resolutions")
+        feats = feats[-4:]
+        feats.sort(key=lambda t: t[3] * t[4], reverse=True)
+        node_names = [n for _, n, _, _, _ in feats]
+        outplanes = [c for _, _, c, _, _ in feats]
+        return node_names, outplanes
+
+    def get_outplanes(self):
+        return list(self._outplanes)
+
+    def forward(self, tensor_list):
+        outputs = {}
+        handles = []
+
+        def mk(name):
+            def _h(_m, _i, o):
+                if isinstance(o, torch.Tensor) and o.dim() == 4:
+                    outputs[name] = o
+
+            return _h
+
+        for name in self.node_names:
+            handles.append(self._modules_map[name].register_forward_hook(mk(name)))
+        _ = self.backbone(tensor_list)
+        for h in handles:
+            h.remove()
+        return [outputs[name] for name in self.node_names]

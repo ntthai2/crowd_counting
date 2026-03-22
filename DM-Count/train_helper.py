@@ -9,7 +9,7 @@ import numpy as np
 from datetime import datetime
 
 from datasets.crowd import Crowd_sh
-from models import vgg19
+from models import build_model
 from losses.ot_loss import OT_Loss
 from utils.pytorch_utils import Save_Handle, AverageMeter
 import utils.log_utils as log_utils
@@ -66,7 +66,7 @@ class Trainer(object):
                                           num_workers=args.num_workers * self.device_count,
                                           pin_memory=(True if x == 'train' else False))
                             for x in ['train', 'val']}
-        self.model = vgg19()
+        self.model = build_model(getattr(args, 'backbone', 'vgg19'))
         self.model.to(self.device)
         self.optimizer = optim.Adam(self.model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 

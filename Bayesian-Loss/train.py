@@ -47,6 +47,8 @@ def parse_args():
                         help='sigma for likelihood')
     parser.add_argument('--background-ratio', type=float, default=1.0,
                         help='background ratio')
+    parser.add_argument('--backbone', type=str, default='vgg19',
+                        help='vgg19 (default) or any torchvision classification model name')
     args = parser.parse_args()
     return args
 

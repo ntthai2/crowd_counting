@@ -89,6 +89,30 @@ class ShanghaiTechDataset(Dataset):
 # Models
 # ---------------------------------------------------------------------------
 
+def _set_regression_head(model: nn.Module, model_name: str) -> nn.Module:
+    # Common torchvision classifier interfaces.
+    if hasattr(model, "fc") and isinstance(model.fc, nn.Linear):
+        model.fc = nn.Linear(model.fc.in_features, 1)
+        return model
+
+    if hasattr(model, "classifier"):
+        classifier = getattr(model, "classifier")
+        if isinstance(classifier, nn.Linear):
+            setattr(model, "classifier", nn.Linear(classifier.in_features, 1))
+            return model
+        if isinstance(classifier, nn.Sequential):
+            layers = list(classifier)
+            for i in range(len(layers) - 1, -1, -1):
+                if isinstance(layers[i], nn.Linear):
+                    layers[i] = nn.Linear(layers[i].in_features, 1)
+                    setattr(model, "classifier", nn.Sequential(*layers))
+                    return model
+
+    raise ValueError(
+        f"Model '{model_name}' does not expose a supported classification head interface (fc/classifier)."
+    )
+
+
 def build_model(model_type: str) -> nn.Module:
     if model_type == "vgg16":
         backbone = models.vgg16(weights=models.VGG16_Weights.IMAGENET1K_V1)
@@ -106,7 +130,11 @@ def build_model(model_type: str) -> nn.Module:
         backbone = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V1)
         backbone.fc = nn.Linear(2048, 1)
     else:
-        raise ValueError(f"Unknown model_type: {model_type}")
+        available = set(models.list_models(module=models))
+        if model_type not in available:
+            raise ValueError(f"Unknown model_type: {model_type}")
+        backbone = models.get_model(model_type, weights="DEFAULT")
+        backbone = _set_regression_head(backbone, model_type)
     return backbone
 
 
@@ -159,7 +187,7 @@ def main():
     parser.add_argument("--save-dir",   required=True,
                         help="Where to save checkpoints")
     parser.add_argument("--model-type", default="vgg16",
-                        choices=["vgg16", "resnet50"])
+                        help="vgg16/resnet50 or any torchvision classification model name")
     parser.add_argument("--epochs",     type=int,   default=1000)
     parser.add_argument("--lr",         type=float, default=1e-4)
     parser.add_argument("--batch-size", type=int,   default=8)

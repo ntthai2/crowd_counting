@@ -43,6 +43,8 @@ parser.add_argument('--patience', type=int, default=50,
 
 parser.add_argument('--ckpt-dir', type=str, default='../logs/csrnet_sha_ckpts',
                     help='directory to save checkpoints (default: ../logs/csrnet_sha_ckpts)')
+parser.add_argument('--backbone', type=str, default='vgg16',
+                    help='vgg16 (default) or any torchvision classification model name')
 
 def main():
     
@@ -71,7 +73,7 @@ def main():
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
     torch.cuda.manual_seed(args.seed)
     
-    model = CSRNet()
+    model = CSRNet(backbone=args.backbone)
     
     model = model.cuda()
     
