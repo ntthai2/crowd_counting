@@ -9,6 +9,7 @@ from utils import save_checkpoint
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.autograd import Variable
 from torchvision import datasets, transforms
 
@@ -155,8 +156,7 @@ def train(train_list, model, criterion, optimizer, epoch):
         img = Variable(img)
         output = model(img)
         
-        
-        
+        output = F.interpolate(output, size=target.shape[-2:], mode='bilinear', align_corners=False)  # align non-VGG output to target size
         
         target = target.type(torch.FloatTensor).unsqueeze(0).cuda()
         target = Variable(target)
