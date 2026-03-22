@@ -208,13 +208,13 @@ class P2PNet(nn.Module):
 
         if not hasattr(backbone, 'out_channels') or len(backbone.out_channels) < 4:
             raise ValueError('Backbone must provide out_channels with at least 4 stages')
-        self.fpn = Decoder(backbone.out_channels[1], backbone.out_channels[2], backbone.out_channels[3])
+        self.fpn = Decoder(backbone.out_channels[0], backbone.out_channels[1], backbone.out_channels[2])
 
     def forward(self, samples: NestedTensor):
         # get the backbone features
         features = self.backbone(samples)
         # forward the feature pyramid
-        features_fpn = self.fpn([features[1], features[2], features[3]])
+        features_fpn = self.fpn([features[0], features[1], features[2]])
 
         batch_size = features[0].shape[0]
         # run the regression and classification branch
