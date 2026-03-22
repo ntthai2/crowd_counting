@@ -1,5 +1,5 @@
 # Experiments Log
->
+
 > Python: `/home/team_cam_ai/miniconda3/envs/ntt_det/bin/python` (3.13.5)
 > PyTorch 2.7.1 · torchvision 0.22.1+cu128 · CUDA 12.8 · single GPU
 > Working dir: `/ssd1/team_cam_ai/ntthai/crowd_counting`
@@ -9,14 +9,14 @@
 
 ## Strategy
 
-Train **8 crowd-counting models** on **ShanghaiTech A (SHA)** and **ShanghaiTech B (SHB)** separately, then evaluate a **YOLO11m head-detector counting baseline** on the same test sets.
+Train **8 crowd-counting models** on **ShanghaiTech A (SHA)** and **ShanghaiTech B (SHB)** separately, then evaluate a **YOLO11m head-detector counting baseline** on the same test sets. Additionally: backbone swap experiments on the global regressor, and real-world video inference on 12 internet videos.
 
 **Models dropped:** CLTR, STEERER, TransCrowd (transformer-based; unstable training, modest results).
 
 | Dataset | Images | Count range | Density |
 |---|---|---|---|
-| ShanghaiTech A | 482 (300 train + 182 test) | 33 – 3,139 | Dense urban |
-| ShanghaiTech B | 716 (400 train + 316 test) | 9 – 578 | Sparse suburban |
+| ShanghaiTech A | 482 (300 train + 182 test) | 33–3,139 | Dense urban |
+| ShanghaiTech B | 716 (400 train + 316 test) | 9–578 | Sparse suburban |
 
 ---
 
@@ -29,8 +29,8 @@ Train **8 crowd-counting models** on **ShanghaiTech A (SHA)** and **ShanghaiTech
 | 3 | BL (Bayesian Loss) | Density map | `Bayesian-Loss/` | `Bayesian-Loss/train.py` |
 | 4 | DM-Count | Density map | `DM-Count/` | `DM-Count/train.py` |
 | 5 | P2PNet | Point detection | `P2PNet/` | `P2PNet/train.py` |
-| 6 | VGG16+FC | Regression (CNN) | root | `train_regressor.py --model-type vgg16` |
-| 7 | ResNet50+FC | Regression (CNN) | root | `train_regressor.py --model-type resnet50` |
+| 6 | VGG16+FC | Regression | root | `train_regressor.py --model-type vgg16` |
+| 7 | ResNet50+FC | Regression | root | `train_regressor.py --model-type resnet50` |
 | 8 | APGCC | Point detection | `APGCC/apgcc/` | `APGCC/apgcc/main.py` |
 | 9 | YOLO11m-head | Detection counting | root | `train_yolo.py` + `eval_yolo.py` |
 
@@ -39,39 +39,41 @@ Train **8 crowd-counting models** on **ShanghaiTech A (SHA)** and **ShanghaiTech
 ## Critical Notes — Read Before Running Anything
 
 1. **BL on SHA requires `--crop-size 128`.**
-   93 SHA images are smaller than 512×512 px (the default crop size). The trainer asserts `image_size >= crop_size` and will crash without this flag. SHB images are all large enough — do not add this flag for SHB.
+   93 SHA images are smaller than 512×512 px. The trainer asserts `image_size >= crop_size` and will crash without this flag. Do not add for SHB.
 
 2. **DM-Count `--data-dir` points to the raw dataset folder, not a subfolder.**
-   Use `data/ShanghaiTech/part_A` (not `part_A/dm`). The loader reads `train/` and `val/` subdirectories with `.npy` density sidecars from the raw path.
+   Use `data/ShanghaiTech/part_A` (not `part_A/dm`).
 
 3. **P2PNet requires pre-creating the output directory before running.**
-   The script opens a log file inside `--output_dir` without creating it first. Always run `mkdir -p logs/p2pnet_sha_ckpts` before the training command.
+   Always run `mkdir -p <output_dir>` before the training command.
 
 4. **VAL log format is uniform across all trainable crowd-counting models:**
    ```
    VAL epoch=XXX mae=XX.XX mse=XX.XX best_mae=XX.XX
    ```
-   Monitor progress with: `grep "^VAL" logs/<model>.log | tail -5`
+   Monitor with: `grep "^VAL" logs/<model>.log | tail -5`
 
-5. **Early stopping** is enabled with patience=50 in all crowd-counting training runs.
+5. **Early stopping** is enabled with `--patience 50` in all crowd-counting training runs.
 
 6. **APGCC list-file compatibility was patched.**
-  APGCC now auto-detects `shanghai_tech_part_a_{train,test}.list` / `shanghai_tech_part_b_{train,test}.list` when `train.list` / `test.list` do not exist. This allows direct training on the same SHA/SHB preprocessing already used by P2PNet.
+   APGCC auto-detects `shanghai_tech_part_a_{train,test}.list` when `train.list` / `test.list` do not exist.
+
+7. **P2PNet uses `vgg16_bn`, not `vgg16`.**
+   The checkpoint was trained with `vgg16_bn` — always pass `--backbone vgg16_bn` or ensure `build_backbone` defaults to `vgg16_bn`. Loading a `vgg16_bn` checkpoint into a `vgg16` model will fail with size mismatch on `body1.7.weight`.
+
+8. **P2PNet FPN index patch.**
+   The original code has an index mismatch between `backbone.out_channels` and `features` for non-VGG backbones. `p2pnet.py` and `backbone.py` have been patched to use `isinstance(backbone, Backbone_VGG)` to select the correct indices. See Bug Fixes section for details.
 
 ---
 
 ## Checkpoint File Locations
 
-| Model | Best checkpoint path |
-|---|---|
-| MCNN | `logs/mcnn_<ds>_ckpts/best_model.h5` |
-| CSRNet | `logs/csrnet_<ds>_ckpts/model_best.pth.tar` |
-| BL | `logs/bl_<ds>_ckpts/best_model.pth` |
-| DM-Count | `logs/dmcount_<ds>_ckpts/best_model.pth` |
-| P2PNet | `logs/p2pnet_<ds>_ckpts/best_mae.pth` |
-| VGG16+FC | `logs/vgg16_<ds>_ckpts/model_best.pth` |
-| ResNet50+FC | `logs/resnet50_<ds>_ckpts/model_best.pth` |
-| APGCC | `logs/apgcc_<ds>_ckpts/best.pth` |
+| Model | SHA checkpoint | SHB checkpoint |
+|---|---|---|
+| CSRNet | `logs/csrnet_sha_ckpts/model_best.pth.tar` | `logs/csrnet_shb_ckpts/model_best.pth.tar` |
+| P2PNet | `logs/p2pnet_sha_ckpts/best_mae.pth` | `logs/p2pnet_shb_ckpts/best_mae.pth` |
+| EfficientNet-B0+FC | `logs/b0_sha_ckpts/model_best.pth` | `logs/b0_shb_ckpts/model_best.pth` |
+| YOLO11m | `runs/head_detection/train/weights/best.pt` | (same — no SHA/SHB distinction) |
 
 ---
 
@@ -79,404 +81,182 @@ Train **8 crowd-counting models** on **ShanghaiTech A (SHA)** and **ShanghaiTech
 
 | Model | LR | Batch | Epochs | Optimizer | Notes |
 |---|---|---|---|---|---|
-| MCNN | 1e-5 | 1 | 400 | Adam | From original paper |
-| CSRNet | 1e-6 | 1 | 400 | SGD | Small LR for VGG16 backbone |
-| BL | 1e-5 | 5 | 500 | Adam | crop=128 for SHA; default 512 for SHB |
-| DM-Count | 1e-4 | 8 | 500 | Adam | VGG19 backbone |
+| MCNN | 1e-5 | 1 | 400 | Adam | — |
+| CSRNet | 1e-6 | 1 | 400 | SGD | Hardcoded in script — not a CLI flag |
+| BL | 1e-5 | 5 | 500 | Adam | crop=128 for SHA only |
+| DM-Count | 1e-4 | 8 | 500 | Adam | — |
 | P2PNet | 1e-4 (backbone 1e-5) | 8 | 3500 | AdamW | lr_drop=3500 |
-| VGG16+FC | 1e-4 | 8 | 1000 | Adam | ImageNet pretrained; input 448×448; MSE loss |
-| ResNet50+FC | 1e-4 | 8 | 1000 | Adam | ImageNet pretrained; input 448×448; MSE loss |
-| APGCC | 1e-4 (backbone 1e-5) | 8 | 3500 | Adam | IFI decoder + APG |
+| VGG16+FC | 1e-4 | 8 | 1000 | Adam | input 448×448 |
+| EfficientNet-B0+FC | 1e-4 | 8 | 1000 | Adam | input 448×448 |
+| APGCC | 1e-4 (backbone 1e-5) | 8 | 3500 | Adam | — |
 
 ---
 
 ## SHA Training Commands
 
-All commands from: `/ssd1/team_cam_ai/ntthai/crowd_counting`
-
 ```bash
 PYTHON=/home/team_cam_ai/miniconda3/envs/ntt_det/bin/python
 BASE=/ssd1/team_cam_ai/ntthai/crowd_counting
 
-# ─── 1. MCNN SHA ─────────────────────────────────────────────────────────────
-nohup $PYTHON -u $BASE/MCNN/train.py \
-  --dataset shanghaiA \
-  --data-dir $BASE/data/ShanghaiTech/part_A \
-  --output-dir $BASE/logs/mcnn_sha_ckpts \
-  --epochs 400 --lr 1e-5 --gpu 0 \
-  > $BASE/logs/mcnn_sha.log 2>&1 &
-
-# ─── 2. CSRNet SHA ───────────────────────────────────────────────────────────
+# ─── CSRNet SHA ───────────────────────────────────────────────────────────────
 nohup $PYTHON -u $BASE/CSRNet/train.py \
-  $BASE/CSRNet/part_A_train.json \
-  $BASE/CSRNet/part_A_test.json \
-  0 sha \
-  --epochs 400 \
+  $BASE/CSRNet/part_A_train.json $BASE/CSRNet/part_A_test.json 0 sha \
+  --epochs 400 --patience 50 \
   --ckpt-dir $BASE/logs/csrnet_sha_ckpts \
   > $BASE/logs/csrnet_sha.log 2>&1 &
 
-# ─── 3. BL SHA ───────────────────────────────────────────────────────────────
-# NOTE: --crop-size 128 is required for SHA
-nohup $PYTHON -u $BASE/Bayesian-Loss/train.py \
-  --data-dir $BASE/data/ShanghaiTech/part_A/bl \
-  --save-dir $BASE/logs/bl_sha_ckpts \
-  --max-epoch 500 --val-epoch 1 --val-start 1 \
-  --lr 1e-5 --device 0 --crop-size 128 \
-  > $BASE/logs/bl_sha.log 2>&1 &
-
-# ─── 4. DM-Count SHA ─────────────────────────────────────────────────────────
-# NOTE: --data-dir is the raw part_A/ folder, not part_A/dm/
-nohup $PYTHON -u $BASE/DM-Count/train.py \
-  --dataset sha \
-  --data-dir $BASE/data/ShanghaiTech/part_A \
-  --save-dir $BASE/logs/dmcount_sha_ckpts \
-  --max-epoch 500 --val-epoch 1 --val-start 1 \
-  --lr 1e-4 --device 0 \
-  > $BASE/logs/dmcount_sha.log 2>&1 &
-
-# ─── 5. P2PNet SHA ───────────────────────────────────────────────────────────
-# NOTE: mkdir required — the script does not auto-create output_dir
+# ─── P2PNet SHA ───────────────────────────────────────────────────────────────
 mkdir -p $BASE/logs/p2pnet_sha_ckpts
 nohup $PYTHON -u $BASE/P2PNet/train.py \
   --dataset_file SHHA \
   --data_root $BASE/data/ShanghaiTech/part_A \
   --output_dir $BASE/logs/p2pnet_sha_ckpts \
   --checkpoints_dir $BASE/logs/p2pnet_sha_ckpts \
-  --epochs 3500 --lr 1e-4 --gpu_id 0 \
+  --epochs 3500 --lr 1e-4 --patience 200 --backbone vgg16_bn --gpu_id 0 \
   > $BASE/logs/p2pnet_sha.log 2>&1 &
 
-# ─── 6. VGG16+FC SHA ─────────────────────────────────────────────────────────
+# ─── EfficientNet-B0+FC SHA ───────────────────────────────────────────────────
 nohup $PYTHON -u $BASE/train_regressor.py \
   --dataset ShanghaiA --data-dir $BASE/data/ShanghaiTech/part_A \
-  --save-dir $BASE/logs/vgg16_sha_ckpts --model-type vgg16 \
-  --epochs 1000 --lr 1e-4 --batch-size 8 --gpu 0 \
-  > $BASE/logs/vgg16_sha.log 2>&1 &
-
-# ─── 7. ResNet50+FC SHA ─────────────────────────────────────────────────────
-nohup $PYTHON -u $BASE/train_regressor.py \
-  --dataset ShanghaiA --data-dir $BASE/data/ShanghaiTech/part_A \
-  --save-dir $BASE/logs/resnet50_sha_ckpts --model-type resnet50 \
-  --epochs 1000 --lr 1e-4 --batch-size 8 --gpu 0 \
-  > $BASE/logs/resnet50_sha.log 2>&1 &
-
-# ─── 8. APGCC SHA ────────────────────────────────────────────────────────────
-mkdir -p $BASE/logs/apgcc_sha_ckpts
-nohup $PYTHON -u $BASE/APGCC/apgcc/main.py \
-  -c $BASE/APGCC/apgcc/configs/SHHA_IFI.yml \
-  DATASETS.DATA_ROOT $BASE/data/ShanghaiTech/part_A \
-  DATASETS.DATASET SHHA \
-  OUTPUT_DIR $BASE/logs/apgcc_sha_ckpts \
-  GPU_ID 0 \
-  > $BASE/logs/apgcc_sha.log 2>&1 &
+  --save-dir $BASE/logs/b0_sha_ckpts --model-type efficientnet_b0 \
+  --epochs 1000 --lr 1e-4 --batch-size 8 --patience 50 \
+  > $BASE/logs/b0_sha.log 2>&1 &
 ```
-
----
 
 ## SHB Training Commands
 
 ```bash
-PYTHON=/home/team_cam_ai/miniconda3/envs/ntt_det/bin/python
-BASE=/ssd1/team_cam_ai/ntthai/crowd_counting
-
-# ─── 1. MCNN SHB ─────────────────────────────────────────────────────────────
-nohup $PYTHON -u $BASE/MCNN/train.py \
-  --dataset shanghaiB \
-  --data-dir $BASE/data/ShanghaiTech/part_B \
-  --output-dir $BASE/logs/mcnn_shb_ckpts \
-  --epochs 400 --lr 1e-5 --gpu 0 \
-  > $BASE/logs/mcnn_shb.log 2>&1 &
-
-# ─── 2. CSRNet SHB ───────────────────────────────────────────────────────────
+# ─── CSRNet SHB ───────────────────────────────────────────────────────────────
 nohup $PYTHON -u $BASE/CSRNet/train.py \
-  $BASE/CSRNet/part_B_train.json \
-  $BASE/CSRNet/part_B_test.json \
-  0 shb \
-  --epochs 400 \
+  $BASE/CSRNet/part_B_train.json $BASE/CSRNet/part_B_test.json 0 shb \
+  --epochs 400 --patience 50 \
   --ckpt-dir $BASE/logs/csrnet_shb_ckpts \
   > $BASE/logs/csrnet_shb.log 2>&1 &
 
-# ─── 3. BL SHB ───────────────────────────────────────────────────────────────
-# No --crop-size flag needed for SHB (all images are >= 512px)
-nohup $PYTHON -u $BASE/Bayesian-Loss/train.py \
-  --data-dir $BASE/data/ShanghaiTech/part_B/bl \
-  --save-dir $BASE/logs/bl_shb_ckpts \
-  --max-epoch 500 --val-epoch 1 --val-start 1 \
-  --lr 1e-5 --device 0 \
-  > $BASE/logs/bl_shb.log 2>&1 &
-
-# ─── 4. DM-Count SHB ─────────────────────────────────────────────────────────
-nohup $PYTHON -u $BASE/DM-Count/train.py \
-  --dataset shb \
-  --data-dir $BASE/data/ShanghaiTech/part_B \
-  --save-dir $BASE/logs/dmcount_shb_ckpts \
-  --max-epoch 500 --val-epoch 1 --val-start 1 \
-  --lr 1e-4 --device 0 \
-  > $BASE/logs/dmcount_shb.log 2>&1 &
-
-# ─── 5. P2PNet SHB ───────────────────────────────────────────────────────────
+# ─── P2PNet SHB ───────────────────────────────────────────────────────────────
 mkdir -p $BASE/logs/p2pnet_shb_ckpts
 nohup $PYTHON -u $BASE/P2PNet/train.py \
   --dataset_file SHHB \
   --data_root $BASE/data/ShanghaiTech/part_B \
   --output_dir $BASE/logs/p2pnet_shb_ckpts \
   --checkpoints_dir $BASE/logs/p2pnet_shb_ckpts \
-  --epochs 3500 --lr 1e-4 --gpu_id 0 \
+  --epochs 3500 --lr 1e-4 --patience 200 --backbone vgg16_bn --gpu_id 0 \
   > $BASE/logs/p2pnet_shb.log 2>&1 &
 
-# ─── 6. VGG16+FC SHB ─────────────────────────────────────────────────────────
+# ─── EfficientNet-B0+FC SHB ───────────────────────────────────────────────────
 nohup $PYTHON -u $BASE/train_regressor.py \
   --dataset ShanghaiB --data-dir $BASE/data/ShanghaiTech/part_B \
-  --save-dir $BASE/logs/vgg16_shb_ckpts --model-type vgg16 \
-  --epochs 1000 --lr 1e-4 --batch-size 8 --gpu 0 \
-  > $BASE/logs/vgg16_shb.log 2>&1 &
-
-# ─── 7. ResNet50+FC SHB ─────────────────────────────────────────────────────
-nohup $PYTHON -u $BASE/train_regressor.py \
-  --dataset ShanghaiB --data-dir $BASE/data/ShanghaiTech/part_B \
-  --save-dir $BASE/logs/resnet50_shb_ckpts --model-type resnet50 \
-  --epochs 1000 --lr 1e-4 --batch-size 8 --gpu 0 \
-  > $BASE/logs/resnet50_shb.log 2>&1 &
-
-# ─── 8. APGCC SHB ────────────────────────────────────────────────────────────
-mkdir -p $BASE/logs/apgcc_shb_ckpts
-nohup $PYTHON -u $BASE/APGCC/apgcc/main.py \
-  -c $BASE/APGCC/apgcc/configs/SHHB_IFI.yml \
-  DATASETS.DATA_ROOT $BASE/data/ShanghaiTech/part_B \
-  DATASETS.DATASET SHHB \
-  OUTPUT_DIR $BASE/logs/apgcc_shb_ckpts \
-  GPU_ID 0 \
-  > $BASE/logs/apgcc_shb.log 2>&1 &
+  --save-dir $BASE/logs/b0_shb_ckpts --model-type efficientnet_b0 \
+  --epochs 1000 --lr 1e-4 --batch-size 8 --patience 50 \
+  > $BASE/logs/b0_shb.log 2>&1 &
 ```
 
 ---
 
-## Resume Commands
+## Backbone Experiment Commands
 
-These extend the training commands with a checkpoint flag. Append to whichever dataset run you need to continue.
-
-| Model | Resume flag | Checkpoint file |
-|---|---|---|
-| MCNN | `--resume <ckpt>` | `logs/mcnn_<ds>_ckpts/best_model.h5` |
-| CSRNet | `--pre <ckpt>` | `logs/csrnet_<ds>_ckpts/model_best.pth.tar` |
-| BL | `--resume <ckpt>` | `logs/bl_<ds>_ckpts/best_model.pth` |
-| DM-Count | `--resume <ckpt>` | `logs/dmcount_<ds>_ckpts/best_model.pth` |
-| P2PNet | `--resume <ckpt>` | `logs/p2pnet_<ds>_ckpts/best_mae.pth` |
-| VGG16+FC | `--resume <ckpt>` | `logs/vgg16_<ds>_ckpts/checkpoint.pth` |
-| ResNet50+FC | `--resume <ckpt>` | `logs/resnet50_<ds>_ckpts/checkpoint.pth` |
-| APGCC | `RESUME True RESUME_PATH <ckpt>` | `logs/apgcc_<ds>_ckpts/best.pth` |
-
-**Example — resume P2PNet SHA:**
 ```bash
-BASE=/ssd1/team_cam_ai/ntthai/crowd_counting
-PYTHON=/home/team_cam_ai/miniconda3/envs/ntt_det/bin/python
-mkdir -p $BASE/logs/p2pnet_sha_ckpts
-nohup $PYTHON -u $BASE/P2PNet/train.py \
-  --dataset_file SHHA \
-  --data_root $BASE/data/ShanghaiTech/part_A \
-  --output_dir $BASE/logs/p2pnet_sha_ckpts \
-  --checkpoints_dir $BASE/logs/p2pnet_sha_ckpts \
-  --epochs 3500 --lr 1e-4 --gpu_id 0 \
-  --resume $BASE/logs/p2pnet_sha_ckpts/best_mae.pth \
-  > $BASE/logs/p2pnet_sha.log 2>&1 &
+# Compatibility check first
+python check_backbone.py --backbone efficientnet_b0 --models regressor
+python check_backbone.py --backbone mobilenet_v3_large --models regressor
+python check_backbone.py --backbone convnext_tiny --models regressor
+
+# Training (SHA only)
+for BB in efficientnet_b0 efficientnet_b3 mobilenet_v3_large convnext_tiny; do
+  $PYTHON -u $BASE/train_regressor.py \
+    --dataset ShanghaiA --data-dir $BASE/data/ShanghaiTech/part_A \
+    --save-dir $BASE/logs/regressor_${BB}_sha \
+    --model-type $BB \
+    --epochs 1000 --lr 1e-4 --batch-size 8 --patience 50 \
+    2>&1 | tee $BASE/logs/exp_backbone/regressor_${BB}.log
+done
 ```
 
 ---
 
-## Monitoring
+## Video Inference Commands
 
 ```bash
-BASE=/ssd1/team_cam_ai/ntthai/crowd_counting
-PYTHON=/home/team_cam_ai/miniconda3/envs/ntt_det/bin/python
+mkdir -p results
 
-# List running training processes
-ps aux | grep -E "[p]ython.*train" | awk '{print $2, $12, $13, $14}'
+# Run all models on all videos, both SHA and SHB checkpoints
+for video in videos/*.mp4; do
+  name=$(basename "$video" .mp4)
+  python video_inference.py --model all --trained_on sha \
+    --video "$video" --output_csv "results/${name}_sha.csv" --every_n 5
+  python video_inference.py --model all --trained_on shb \
+    --video "$video" --output_csv "results/${name}_shb.csv" --every_n 5
+done
 
-# GPU memory and utilization
-nvidia-smi --query-gpu=memory.used,memory.free,utilization.gpu --format=csv,noheader
-
-# All VAL lines across all logs, sorted by model
-grep "^VAL" $BASE/logs/*.log | sort
-
-# Follow a single log live
-tail -f $BASE/logs/mcnn_sha.log
+# Extract summary from all CSVs
+for f in results/*.csv; do
+  echo "=== $f ==="
+  python -c "
+import pandas as pd
+df = pd.read_csv('$f')
+cols = [c for c in df.columns if c not in ['frame','timestamp_s']]
+for c in cols:
+    print(f'  {c}: mean={df[c].mean():.1f} std={df[c].std():.1f}')
+"
+done
 ```
 
 ---
 
-## YOLO Detection-Count Evaluation
-
-YOLO11m is trained on merged head-detection datasets (`runs/head_detection/train/weights/best.pt`) and evaluated on SHA/SHB by counting predicted boxes per image.
-
-### Main evaluation command (current best settings)
-
-```bash
-PYTHON=/home/team_cam_ai/miniconda3/envs/ntt_det/bin/python
-BASE=/ssd1/team_cam_ai/ntthai/crowd_counting
-
-$PYTHON -u $BASE/eval_yolo.py \
-  --weights $BASE/runs/head_detection/train/weights/best.pt \
-  --dataset both --device 0 \
-  --conf 0.25 --imgsz 1280
-```
-
-### Save per-image CSVs for analysis/visualization
-
-```bash
-$PYTHON -u $BASE/eval_yolo.py \
-  --weights $BASE/runs/head_detection/train/weights/best.pt \
-  --dataset both --device 0 \
-  --conf 0.25 --imgsz 1280 \
-  --save-csv-dir $BASE/runs/head_detection/eval_csv
-```
-
-### Best/Worst prediction visualization
-
-```bash
-$PYTHON -u $BASE/visualize_pred.py \
-  --weights $BASE/runs/head_detection/train/weights/best.pt \
-  --csv-sha $BASE/runs/head_detection/eval_csv/yolo_sha.csv \
-  --csv-shb $BASE/runs/head_detection/eval_csv/yolo_shb.csv \
-  --sha-root $BASE/data/ShanghaiTech/part_A \
-  --shb-root $BASE/data/ShanghaiTech/part_B \
-  --out-dir $BASE/runs/head_detection/vis \
-  --num 1 --conf 0.25 --imgsz 1280 --device 0
-```
-
-Visualization outputs are saved under `runs/head_detection/vis/`.
-
----
-
-## Results
-
-Lower is better for both MAE and MSE.
-
-### ShanghaiTech A
-
-| Model | MAE | MSE | Published MAE |
-|---|---|---|---|
-| MCNN | 131.47 | 202.50 | 110.2 |
-| CSRNet | 70.15 | 109.17 | 68.2 |
-| BL | 66.34 | 100.65 | 62.8 |
-| DM-Count | 65.88 | 104.70 | 59.7 |
-| P2PNet | 58.09 | 95.27 | 52.7 |
-| APGCC | 61.91 | 94.95 | 49.9 |
-| VGG16+FC | 113.51 | 168.23 | — |
-| ResNet50+FC | 135.47 | 200.70 | — |
-| YOLO11m-head | 236.30 | 392.29 | — |
-
-### ShanghaiTech B
-
-| Model | MAE | MSE | Published MAE |
-|---|---|---|---|
-| MCNN | 30.79 | 46.92 | 26.4 |
-| CSRNet | 10.46 | 16.90 | 10.6 |
-| BL | 8.10 | 13.45 | 7.7 |
-| DM-Count | 8.85 | 13.64 | 7.4 |
-| P2PNet | 9.26 | 16.53 | 6.7 |
-| APGCC | 10.26 | 16.92 | 6.0 |
-| VGG16+FC | 16.03 | 24.95 | — |
-| ResNet50+FC | 22.46 | 40.57 | — |
-| YOLO11m-head | 40.20 | 72.93 | — |
-
----
-
-## Codebase Notes
-
-### Bug Fixes Applied
+## Bug Fixes Applied
 
 | File | Fix |
 |---|---|
 | `P2PNet/util/misc.py` | `float(torchvision.__version__[:3])` → tuple comparison; fixes crash with torchvision 0.22 |
-| `P2PNet/models/vgg_.py` | Fall back to `torch.hub.load_state_dict_from_url` when hardcoded private weight path is absent |
-| `DM-Count/train_helper.py` | Moved VAL print line to after `self.best_mae` update so it shows current best, not stale value |
+| `P2PNet/models/vgg_.py` | Fallback to `torch.hub.load_state_dict_from_url` when hardcoded private weight path is absent |
+| `P2PNet/models/p2pnet.py` | FPN feature index mismatch for non-VGG backbones — added `isinstance(backbone, Backbone_VGG)` branch: VGG uses `out_channels[1,2,3]` + `features[1,2,3]`, Torchvision backbones use `[0,1,2]` |
+| `P2PNet/models/backbone.py` | `_select_multiscale_features` updated to pick max-channel layer per spatial resolution instead of first match — fixes incorrect `out_channels` for ResNet50 |
+| `DM-Count/train_helper.py` | Moved VAL print to after `self.best_mae` update |
+| `CSRNet/train.py` | Added `import torch.nn.functional as F` and `F.interpolate` before MSE loss to align non-VGG backbone output size with target density map |
 
-### Data Layout Reference
+---
+
+## Data Layout Reference
 
 | Model | SHA data path | SHB data path |
 |---|---|---|
-| MCNN | `data/ShanghaiTech/part_A/*/gt_density_map/*.npy` | `part_B/` same layout |
-| CSRNet | `data/ShanghaiTech/part_A/*/ground_truth/*.h5` | `part_B/` same layout |
-| BL | `data/ShanghaiTech/part_A/bl/train/` + `val/` | `part_B/bl/` same |
-| DM-Count | `data/ShanghaiTech/part_A/train/` + `val/` | `part_B/` same |
+| CSRNet | `CSRNet/part_A_train.json` + `.h5` density maps | `CSRNet/part_B_train.json` |
 | P2PNet | `P2PNet/crowd_datasets/SHHA/SHHA.list` | `SHHB/SHHB.list` |
-| VGG16+FC / ResNet50+FC | `data/ShanghaiTech/part_A/` (raw) | `data/ShanghaiTech/part_B/` (raw) |
-| APGCC | `data/ShanghaiTech/part_A/shanghai_tech_part_a_train.list` | `data/ShanghaiTech/part_B/shanghai_tech_part_b_train.list` |
-| YOLO11m-head eval | `eval_yolo.py --sha-root data/ShanghaiTech/part_A` | `eval_yolo.py --shb-root data/ShanghaiTech/part_B` |
-
-### Preprocessing Scripts (`preprocess/`)
-
-These have all been run already. Only re-run if data is lost.
-
-| Script | Purpose |
-|---|---|
-| `gen_density_maps.py` | Gaussian `.npy` density maps for MCNN |
-| `gen_h5_density.py` | `.h5` density maps for CSRNet |
-| `gen_point_npy.py` | BL `(N,3)` + DM-Count `(N,2)` `.npy` point files |
-| `gen_csrnet_json.py` | CSRNet JSON file lists |
-| `gen_p2pnet_data.py` | P2PNet `.list` annotation files |
-| `reorganise_bl_dm.py` | Reorganizes raw data into `train/` + `val/` for BL/DM-Count |
+| Regressor | `data/ShanghaiTech/part_A/` (raw) | `data/ShanghaiTech/part_B/` (raw) |
 
 ---
 
 ## Project Narrative
 
-> This section records what was actually done — decisions made, problems encountered, and how they were resolved — for use in the final report.
-
 ### Background and Motivation
 
-The project aims to benchmark crowd-counting methods spanning three architectural families: **density-map regression**, **point detection**, and **global count regression**. Eight crowd-counting models were fully trained and evaluated, plus one additional YOLO detection-count baseline:
+The project benchmarks crowd-counting methods spanning four architectural families. Eight models were fully trained and evaluated, plus YOLO as a detection-count baseline. Three transformer-based models (CLTR, STEERER, TransCrowd) were attempted but dropped due to unstable training.
 
-- *Density-map* (MCNN, CSRNet, BL, DM-Count) — the mainstream approach; the network predicts a spatial density map whose integral gives the count.
-- *Point detection* (P2PNet, APGCC) — predicts a discrete set of head locations/proposals instead of a smooth map.
-- *Count regression* (VGG16+FC, ResNet50+FC) — global regression directly from image features; simpler baseline but lower accuracy.
-- *Detection counting* (YOLO11m-head) — detects heads with an object detector and uses the number of boxes as count.
+### Backbone Swap Experiment
 
-Three additional transformer-based models (CLTR, STEERER, TransCrowd) were attempted but dropped: training was unstable and after hundreds of epochs results could not approach the density-map baselines, making the additional complexity unjustifiable within the project scope.
+Backbone swap was evaluated on the global regression model to answer: *which backbone properties matter for crowd counting?* Six backbones were tested. Key findings:
 
-ShanghaiTech A and B were chosen as the evaluation benchmarks because they are the universally-accepted standard for crowd counting, they are small enough to train on a single GPU in a reasonable time, and published MAE/MSE numbers are available for every model so comparisons are meaningful.
+- **EfficientNet family outperforms VGG16** despite being 10–25x smaller. EfficientNet-B0 (5.3M params) achieved MAE 91.67 vs VGG16's 113.51.
+- **ImageNet accuracy is not a reliable predictor** — EfficientNet-B0 (77.7% acc) beats ResNet50 (80.9% acc) and ConvNeXt-Tiny (82.5% acc). Feature efficiency matters more than raw classification accuracy.
+- **ResNet50 underperforms VGG16** — skip connections and depth do not help global regression on this task.
+- **ConvNeXt-Tiny failed to converge** with lr=1e-4 — likely requires different lr schedule (LayerNorm + GELU architecture).
+- **CSRNet backbone swap failed** — lr is hardcoded at 1e-6 for VGG16; non-VGG backbones need higher lr but no CLI flag exists. All non-VGG variants plateaued at MAE ~390.
+- **P2PNet FPN is architecture-sensitive** — only ResNet50 converged (MAE 114 vs VGG16-BN's 58); MobileNetV3 and EfficientNet produced degenerate results due to FPN channel mismatch.
 
-### Dataset Strategy
+### Video Inference and Domain Gap
 
-Initial work included downloading UCF-QNRF (4.3 GB raw + 45 GB preprocessed), the mall dataset (4.6 GB), and Unidata (502 MB) alongside ShanghaiTech. After evaluating time constraints and the scope of the project, the decision was made to focus exclusively on SHA and SHB. The other datasets were downloaded and preprocessed but ultimately unused. The preprocessed QNRF data alone (45 GB) will be deleted once code cleanup is complete.
+Twelve internet videos were collected (7 dense mall, 5 sparse retail/CCTV) and evaluated with SHA-trained and SHB-trained checkpoints for each model. Three videos were manually counted for ground truth validation.
 
-### Environment Setup
+**Key findings:**
+- P2PNet SHA was closest on medium-density scenes (~150 people).
+- CSRNet SHA was closest on high-density scenes (~500 people).
+- P2PNet SHB collapsed on sparse scenes (predicted 2–6 people when 10+ were present).
+- Regressor (EfficientNet-B0) showed high temporal instability (high std) due to sensitivity to visual texture — shelves, bottles, and decorative lighting caused large frame-to-frame variance.
+- YOLO consistently failed on crowds above 20 people due to occlusion and small object scale.
+- Domain gap was clearest in the regressor: SHA-trained predicted 714 on a dense mall (GT ~500) while SHB-trained predicted only 140 on the same scene.
 
-All models were run under a single shared Conda environment (`ntt_det`) with Python 3.13.5, PyTorch 2.7.1, and CUDA 12.8.
+### Infrastructure Notes
 
-### Code Fixes Required Before Training
-
-Several bugs in the original model repositories had to be patched:
-
-**P2PNet torchvision version check** (`P2PNet/util/misc.py`): The code did `float(torchvision.__version__[:3])` which crashes when the version string starts with `0.22` (only one digit before the decimal in the substring). Fixed by comparing version tuples instead.
-
-**P2PNet VGG backbone weights** (`P2PNet/models/vgg_.py`): The model tried to load weights from a hardcoded private server path (`/public/home/...`). When that path does not exist on the training machine it raised a `FileNotFoundError` at import time. Fixed by adding a fallback to `torch.hub.load_state_dict_from_url` using the standard `torchvision` URL for VGG16-BN.
-
-**BL crop-size assertion on SHA** (`Bayesian-Loss/train.py`): The Bayesian-Loss trainer asserts that every image is at least as large as the crop size. 93 images in ShanghaiTech A are smaller than the default 512×512. Solved by adding `--crop-size 128` for SHA training only. SHB images are uniformly larger and do not need this flag.
-
-**DM-Count `--data-dir` confusion**: The DM-Count trainer expects the raw dataset root (containing `train/` and `val/` subdirectories populated by `reorganise_bl_dm.py`), not the `dm/` subdirectory that might be expected from the variable name. This was discovered after the first training run produced an empty dataset error.
-
-**DM-Count best-MAE display bug** (`DM-Count/train_helper.py`): The `VAL` log line was printed before `self.best_mae` was updated, so it always showed the previous epoch's best. Fixed by moving the print statement two lines down.
-
-### Preprocessing Decisions
-
-**Density maps (adaptive Gaussian):** Rather than using fixed-sigma Gaussian density maps (as in the original CSRNet paper), an adaptive per-head sigma was used for all density-map models. The sigma for each annotated head is computed as the mean distance to its three nearest neighbours multiplied by 0.3, clamped to [2, 20] pixels. This is the standard practice for dense scenes. The same density map generation code (`gen_density_maps.py`, `gen_h5_density.py`) was used for all relevant models to ensure consistency.
-
-**BL point format:** Bayesian-Loss requires a 3-column `.npy` file `[x, y, knn_dist]` where the third column is the mean k-NN distance used in the Bayesian uncertainty loss. This was computed in `gen_point_npy.py` with k=3, matching the BL paper.
-
-**DM-Count needs `train/` / `val/` split directories:** DM-Count's dataset loader globs for images in `<root>/train/` and `<root>/val/`. ShanghaiTech ships as `train_data/` and `test_data/` (no validation set is provided separately; researchers use the test set as validation). The `reorganise_bl_dm.py` script creates the expected structure by symlinking images and generating `.npy` annotation files into `train/` and `val/` subdirectories.
-
-### Uniform Validation Logging
-
-All trainable crowd-counting models output validation metrics in a consistent format:
-```
-VAL epoch=XXX mae=XX.XX mse=XX.XX best_mae=XX.XX
-```
-This required patching several models' validation loops. The format was chosen to allow a single `grep "^VAL"` command to aggregate results across all log files regardless of model, and also to feed the `plot_training.py` script which generates training curves.
-
-### Early Stopping
-
-A patience-50 early stopping rule was added uniformly across all models. Training halts if validation MAE does not improve for 50 consecutive epochs. This prevents over-training on the small SHA/SHB datasets (300 / 400 training images respectively) and frees the GPU for the next model without manual monitoring.
-
-### Infrastructure
-
-All training jobs are launched with `nohup ... &` to allow logging out. `conda run` was discovered to buffer stdout aggressively, making log files appear empty until the process ends. The fix is to activate the environment in the shell before launching, or to call the Python binary by its absolute path (`/home/team_cam_ai/miniconda3/envs/ntt_det/bin/python`) directly without `conda run`.
+- All training uses `nohup ... &` with absolute Python path to avoid `conda run` stdout buffering.
+- `check_backbone.py` runs a real forward pass (not just parameter name check) to verify shape compatibility before training.
+- `video_inference.py` supports `--model all --trained_on sha|shb` for batch evaluation with per-frame CSV output.
