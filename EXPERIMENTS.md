@@ -20,52 +20,6 @@ Train **8 crowd-counting models** on **ShanghaiTech A (SHA)** and **ShanghaiTech
 
 ---
 
-## Models
-
-| # | Model | Family | Dir | Entry point |
-|---|---|---|---|---|
-| 1 | MCNN | Density map | `MCNN/` | `MCNN/train.py` |
-| 2 | CSRNet | Density map | `CSRNet/` | `CSRNet/train.py` |
-| 3 | BL (Bayesian Loss) | Density map | `Bayesian-Loss/` | `Bayesian-Loss/train.py` |
-| 4 | DM-Count | Density map | `DM-Count/` | `DM-Count/train.py` |
-| 5 | P2PNet | Point detection | `P2PNet/` | `P2PNet/train.py` |
-| 6 | VGG16+FC | Regression | root | `train_regressor.py --model-type vgg16` |
-| 7 | ResNet50+FC | Regression | root | `train_regressor.py --model-type resnet50` |
-| 8 | APGCC | Point detection | `APGCC/apgcc/` | `APGCC/apgcc/main.py` |
-| 9 | YOLO11m-head | Detection counting | root | `train_yolo.py` + `eval_yolo.py` |
-
----
-
-## Critical Notes — Read Before Running Anything
-
-1. **BL on SHA requires `--crop-size 128`.**
-   93 SHA images are smaller than 512×512 px. The trainer asserts `image_size >= crop_size` and will crash without this flag. Do not add for SHB.
-
-2. **DM-Count `--data-dir` points to the raw dataset folder, not a subfolder.**
-   Use `data/ShanghaiTech/part_A` (not `part_A/dm`).
-
-3. **P2PNet requires pre-creating the output directory before running.**
-   Always run `mkdir -p <output_dir>` before the training command.
-
-4. **VAL log format is uniform across all trainable crowd-counting models:**
-   ```
-   VAL epoch=XXX mae=XX.XX mse=XX.XX best_mae=XX.XX
-   ```
-   Monitor with: `grep "^VAL" logs/<model>.log | tail -5`
-
-5. **Early stopping** is enabled with `--patience 50` in all crowd-counting training runs.
-
-6. **APGCC list-file compatibility was patched.**
-   APGCC auto-detects `shanghai_tech_part_a_{train,test}.list` when `train.list` / `test.list` do not exist.
-
-7. **P2PNet uses `vgg16_bn`, not `vgg16`.**
-   The checkpoint was trained with `vgg16_bn` — always pass `--backbone vgg16_bn` or ensure `build_backbone` defaults to `vgg16_bn`. Loading a `vgg16_bn` checkpoint into a `vgg16` model will fail with size mismatch on `body1.7.weight`.
-
-8. **P2PNet FPN index patch.**
-   The original code has an index mismatch between `backbone.out_channels` and `features` for non-VGG backbones. `p2pnet.py` and `backbone.py` have been patched to use `isinstance(backbone, Backbone_VGG)` to select the correct indices. See Bug Fixes section for details.
-
----
-
 ## Checkpoint File Locations
 
 | Model | SHA checkpoint | SHB checkpoint |
@@ -81,14 +35,9 @@ Train **8 crowd-counting models** on **ShanghaiTech A (SHA)** and **ShanghaiTech
 
 | Model | LR | Batch | Epochs | Optimizer | Notes |
 |---|---|---|---|---|---|
-| MCNN | 1e-5 | 1 | 400 | Adam | — |
 | CSRNet | 1e-6 | 1 | 400 | SGD | Hardcoded in script — not a CLI flag |
-| BL | 1e-5 | 5 | 500 | Adam | crop=128 for SHA only |
-| DM-Count | 1e-4 | 8 | 500 | Adam | — |
 | P2PNet | 1e-4 (backbone 1e-5) | 8 | 3500 | AdamW | lr_drop=3500 |
-| VGG16+FC | 1e-4 | 8 | 1000 | Adam | input 448×448 |
 | EfficientNet-B0+FC | 1e-4 | 8 | 1000 | Adam | input 448×448 |
-| APGCC | 1e-4 (backbone 1e-5) | 8 | 3500 | Adam | — |
 
 ---
 
@@ -153,27 +102,6 @@ nohup $PYTHON -u $BASE/train_regressor.py \
 
 ---
 
-## Backbone Experiment Commands
-
-```bash
-# Compatibility check first
-python check_backbone.py --backbone efficientnet_b0 --models regressor
-python check_backbone.py --backbone mobilenet_v3_large --models regressor
-python check_backbone.py --backbone convnext_tiny --models regressor
-
-# Training (SHA only)
-for BB in efficientnet_b0 efficientnet_b3 mobilenet_v3_large convnext_tiny; do
-  $PYTHON -u $BASE/train_regressor.py \
-    --dataset ShanghaiA --data-dir $BASE/data/ShanghaiTech/part_A \
-    --save-dir $BASE/logs/regressor_${BB}_sha \
-    --model-type $BB \
-    --epochs 1000 --lr 1e-4 --batch-size 8 --patience 50 \
-    2>&1 | tee $BASE/logs/exp_backbone/regressor_${BB}.log
-done
-```
-
----
-
 ## Video Inference Commands
 
 ```bash
@@ -201,20 +129,6 @@ for c in cols:
 done
 ```
 
----
-
-## Bug Fixes Applied
-
-| File | Fix |
-|---|---|
-| `P2PNet/util/misc.py` | `float(torchvision.__version__[:3])` → tuple comparison; fixes crash with torchvision 0.22 |
-| `P2PNet/models/vgg_.py` | Fallback to `torch.hub.load_state_dict_from_url` when hardcoded private weight path is absent |
-| `P2PNet/models/p2pnet.py` | FPN feature index mismatch for non-VGG backbones — added `isinstance(backbone, Backbone_VGG)` branch: VGG uses `out_channels[1,2,3]` + `features[1,2,3]`, Torchvision backbones use `[0,1,2]` |
-| `P2PNet/models/backbone.py` | `_select_multiscale_features` updated to pick max-channel layer per spatial resolution instead of first match — fixes incorrect `out_channels` for ResNet50 |
-| `DM-Count/train_helper.py` | Moved VAL print to after `self.best_mae` update |
-| `CSRNet/train.py` | Added `import torch.nn.functional as F` and `F.interpolate` before MSE loss to align non-VGG backbone output size with target density map |
-
----
 
 ## Data Layout Reference
 
@@ -254,9 +168,3 @@ Twelve internet videos were collected (7 dense mall, 5 sparse retail/CCTV) and e
 - Regressor (EfficientNet-B0) showed high temporal instability (high std) due to sensitivity to visual texture — shelves, bottles, and decorative lighting caused large frame-to-frame variance.
 - YOLO consistently failed on crowds above 20 people due to occlusion and small object scale.
 - Domain gap was clearest in the regressor: SHA-trained predicted 714 on a dense mall (GT ~500) while SHB-trained predicted only 140 on the same scene.
-
-### Infrastructure Notes
-
-- All training uses `nohup ... &` with absolute Python path to avoid `conda run` stdout buffering.
-- `check_backbone.py` runs a real forward pass (not just parameter name check) to verify shape compatibility before training.
-- `video_inference.py` supports `--model all --trained_on sha|shb` for batch evaluation with per-frame CSV output.
